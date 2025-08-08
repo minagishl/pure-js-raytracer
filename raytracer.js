@@ -217,6 +217,60 @@ class Mesh {
   }
 }
 
+class VolumetricBox {
+  constructor(min, max, material) {
+    this.min = min;
+    this.max = max;
+    this.material = material;
+    this.type = "volume";
+  }
+
+  intersect(ray) {
+    const epsilon = 1e-6;
+    
+    // Ray-box intersection using slab method
+    const invDir = new Vector3(
+      1.0 / ray.direction.x,
+      1.0 / ray.direction.y,
+      1.0 / ray.direction.z
+    );
+    
+    const t1x = (this.min.x - ray.origin.x) * invDir.x;
+    const t2x = (this.max.x - ray.origin.x) * invDir.x;
+    const t1y = (this.min.y - ray.origin.y) * invDir.y;
+    const t2y = (this.max.y - ray.origin.y) * invDir.y;
+    const t1z = (this.min.z - ray.origin.z) * invDir.z;
+    const t2z = (this.max.z - ray.origin.z) * invDir.z;
+    
+    const tmin = Math.max(Math.max(Math.min(t1x, t2x), Math.min(t1y, t2y)), Math.min(t1z, t2z));
+    const tmax = Math.min(Math.min(Math.max(t1x, t2x), Math.max(t1y, t2y)), Math.max(t1z, t2z));
+    
+    if (tmax < 0 || tmin > tmax) return null;
+    
+    const tNear = tmin > epsilon ? tmin : epsilon;
+    const tFar = tmax;
+    
+    if (tNear >= tFar) return null;
+    
+    return {
+      tNear: tNear,
+      tFar: tFar,
+      material: this.material,
+      type: "volume"
+    };
+  }
+}
+
+class VolumeMaterial {
+  constructor(options = {}) {
+    this.density = options.density || 0.1;
+    this.absorption = options.absorption || new Vector3(0.1, 0.1, 0.1);
+    this.scattering = options.scattering || new Vector3(0.5, 0.5, 0.5);
+    this.emission = options.emission || new Vector3(0, 0, 0);
+    this.phaseFunction = options.phaseFunction || 0.0; // -1 to 1, Henyey-Greenstein
+  }
+}
+
 class OBJLoader {
   static async loadFromFile(file) {
     const text = await file.text();
@@ -609,9 +663,17 @@ class RayTracer {
       return this.backgroundColor;
     }
 
+    // Check for volume intersections first
+    const volumeIntersection = this.intersectVolumes(ray);
+    let volumeColor = new Vector3(0, 0, 0);
+    
+    if (volumeIntersection) {
+      volumeColor = this.sampleVolume(ray, volumeIntersection, depth);
+    }
+
     const intersection = this.intersectScene(ray);
     if (!intersection) {
-      return this.backgroundColor;
+      return this.backgroundColor.add(volumeColor);
     }
 
     const { point, normal, material } = intersection;
@@ -650,6 +712,73 @@ class RayTracer {
       }
     }
 
+    return color.add(volumeColor);
+  }
+
+  intersectVolumes(ray) {
+    let closest = null;
+    let minDistance = Infinity;
+
+    for (const object of this.objects) {
+      if (object.type === "volume") {
+        const intersection = object.intersect(ray);
+        if (intersection && intersection.tNear < minDistance) {
+          minDistance = intersection.tNear;
+          closest = intersection;
+        }
+      }
+    }
+
+    return closest;
+  }
+
+  sampleVolume(ray, volumeIntersection, depth) {
+    const { tNear, tFar, material } = volumeIntersection;
+    const stepSize = 0.1;
+    const steps = Math.ceil((tFar - tNear) / stepSize);
+    let color = new Vector3(0, 0, 0);
+    let transmittance = 1.0;
+
+    for (let i = 0; i < steps; i++) {
+      const t = tNear + (i + Math.random()) * stepSize;
+      if (t >= tFar) break;
+
+      const point = ray.at(t);
+      const density = material.density;
+      const extinction = material.absorption.add(material.scattering);
+      
+      // Sample lighting at this point
+      const lightContribution = this.sampleVolumeLight(point, material);
+      
+      // Add emission
+      color = color.add(material.emission.multiply(density * stepSize * transmittance));
+      
+      // Add scattering
+      color = color.add(lightContribution.multiply(material.scattering).multiply(density * stepSize * transmittance));
+      
+      // Update transmittance
+      transmittance *= Math.exp(-extinction.length() * density * stepSize);
+      
+      if (transmittance < 0.001) break; // Early termination
+    }
+
+    return color;
+  }
+
+  sampleVolumeLight(point, material) {
+    let color = new Vector3(0, 0, 0);
+    
+    for (const light of this.lights) {
+      const lightDir = light.position.subtract(point).normalize();
+      const lightDistance = light.position.subtract(point).length();
+      
+      // Simple phase function (isotropic scattering)
+      const phaseValue = 1.0 / (4.0 * Math.PI);
+      
+      const attenuation = 1.0 / (1.0 + lightDistance * lightDistance * 0.01);
+      color = color.add(light.color.multiply(light.intensity * attenuation * phaseValue));
+    }
+    
     return color;
   }
 
@@ -913,6 +1042,31 @@ class RayTracer {
             : null,
         },
       };
+    } else if (obj.type === "volume") {
+      return {
+        type: "volume",
+        min: { x: obj.min.x, y: obj.min.y, z: obj.min.z },
+        max: { x: obj.max.x, y: obj.max.y, z: obj.max.z },
+        material: {
+          density: obj.material.density,
+          absorption: {
+            x: obj.material.absorption.x,
+            y: obj.material.absorption.y,
+            z: obj.material.absorption.z,
+          },
+          scattering: {
+            x: obj.material.scattering.x,
+            y: obj.material.scattering.y,
+            z: obj.material.scattering.z,
+          },
+          emission: {
+            x: obj.material.emission.x,
+            y: obj.material.emission.y,
+            z: obj.material.emission.z,
+          },
+          phaseFunction: obj.material.phaseFunction,
+        },
+      };
     }
   }
 
@@ -1058,6 +1212,10 @@ class RayTracer {
     this.objects.push(new Mesh(vertices, faces, material));
   }
 
+  addVolume(min, max, material) {
+    this.objects.push(new VolumetricBox(min, max, material));
+  }
+
   addLight(position, color, intensity) {
     this.lights.push(new Light(position, color, intensity));
   }
@@ -1185,6 +1343,10 @@ class UIController {
       this.handleMeshUpload(e);
     });
 
+    document.getElementById("add-volume").addEventListener("click", () => {
+      this.addVolume();
+    });
+
     document.getElementById("add-light").addEventListener("click", () => {
       this.addLight();
     });
@@ -1242,6 +1404,22 @@ class UIController {
       console.error('Error loading mesh:', error);
       alert('Error loading mesh file: ' + error.message);
     }
+  }
+
+  addVolume() {
+    const min = new Vector3(-1, -1, -1);
+    const max = new Vector3(1, 1, 1);
+    
+    const material = new VolumeMaterial({
+      density: 0.5,
+      absorption: new Vector3(0.1, 0.1, 0.1),
+      scattering: new Vector3(0.8, 0.8, 0.8),
+      emission: new Vector3(0.1, 0.05, 0),
+    });
+
+    this.raytracer.addVolume(min, max, material);
+    this.updateObjectsList();
+    if (!this.raytracer.isAnimating) this.raytracer.render();
   }
 
   addLight() {
@@ -1314,6 +1492,18 @@ class UIController {
                     </div>
                     <button class="remove-btn" onclick="ui.removeObject(${index})">Remove</button>
                 `;
+      } else if (object.type === "volume") {
+        panel.innerHTML = `
+                    <div class="text-sm font-medium mb-2">Volume ${index + 1}</div>
+                    <div class="control-group">
+                        <label>Density:</label>
+                        <input type="range" min="0.1" max="2" step="0.1" value="${
+                          object.material.density
+                        }" 
+                               onchange="ui.updateVolumeDensity(${index}, this.value)">
+                    </div>
+                    <button class="remove-btn" onclick="ui.removeObject(${index})">Remove</button>
+                `;
       }
 
       container.appendChild(panel);
@@ -1378,6 +1568,13 @@ class UIController {
   updateObjectTransparency(index, value) {
     if (this.raytracer.objects[index]) {
       this.raytracer.objects[index].material.transparency = parseFloat(value);
+      if (!this.raytracer.isAnimating) this.raytracer.render();
+    }
+  }
+
+  updateVolumeDensity(index, value) {
+    if (this.raytracer.objects[index] && this.raytracer.objects[index].type === "volume") {
+      this.raytracer.objects[index].material.density = parseFloat(value);
       if (!this.raytracer.isAnimating) this.raytracer.render();
     }
   }
