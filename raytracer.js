@@ -1483,6 +1483,208 @@ class RayTracer {
     this.animationSystem.removeKeyframe(time);
   }
 
+  serializeScene() {
+    return {
+      version: "1.0",
+      timestamp: Date.now(),
+      settings: {
+        maxBounces: this.maxBounces,
+        antiAliasingSamples: this.antiAliasingSamples,
+        backgroundColor: {
+          x: this.backgroundColor.x,
+          y: this.backgroundColor.y,
+          z: this.backgroundColor.z
+        },
+        ambientLight: this.ambientLight,
+        useImportanceSampling: this.useImportanceSampling,
+        indirectSamples: this.indirectSamples,
+        useDenoising: this.useDenoising,
+        denoisingStrength: this.denoisingStrength,
+        temporalAccumulation: this.temporalAccumulation,
+        useHDREnvironment: this.useHDREnvironment,
+        environmentIntensity: this.environmentIntensity,
+        environmentRotation: this.environmentRotation
+      },
+      camera: {
+        position: { x: this.camera.position.x, y: this.camera.position.y, z: this.camera.position.z },
+        target: { x: this.camera.target.x, y: this.camera.target.y, z: this.camera.target.z },
+        up: { x: this.camera.up.x, y: this.camera.up.y, z: this.camera.up.z },
+        fov: this.camera.fov,
+        aspect: this.camera.aspect
+      },
+      objects: this.objects.map(obj => this.serializeObject(obj)),
+      lights: this.lights.map(light => ({
+        position: { x: light.position.x, y: light.position.y, z: light.position.z },
+        color: { x: light.color.x, y: light.color.y, z: light.color.z },
+        intensity: light.intensity
+      })),
+      animation: {
+        useKeyframes: this.useKeyframes,
+        duration: this.animationSystem.duration,
+        keyframes: this.animationSystem.keyframes.map(kf => ({
+          time: kf.time,
+          transformations: Object.fromEntries(
+            Object.entries(kf.transformations).map(([index, transform]) => [
+              index,
+              {
+                position: transform.position ? { x: transform.position.x, y: transform.position.y, z: transform.position.z } : null,
+                rotation: transform.rotation ? { x: transform.rotation.x, y: transform.rotation.y, z: transform.rotation.z } : null,
+                scale: transform.scale
+              }
+            ])
+          )
+        }))
+      }
+    };
+  }
+
+  loadScene(sceneData) {
+    if (!sceneData || sceneData.version !== "1.0") {
+      throw new Error("Invalid or unsupported scene format");
+    }
+
+    // Clear current scene
+    this.objects = [];
+    this.lights = [];
+    this.animationSystem.keyframes = [];
+
+    // Load settings
+    if (sceneData.settings) {
+      const s = sceneData.settings;
+      this.maxBounces = s.maxBounces || 3;
+      this.antiAliasingSamples = s.antiAliasingSamples || 1;
+      this.backgroundColor = new Vector3(s.backgroundColor?.x || 0.05, s.backgroundColor?.y || 0.05, s.backgroundColor?.z || 0.1);
+      this.ambientLight = s.ambientLight || 0.1;
+      this.useImportanceSampling = s.useImportanceSampling || false;
+      this.indirectSamples = s.indirectSamples || 1;
+      this.useDenoising = s.useDenoising || false;
+      this.denoisingStrength = s.denoisingStrength || 1.0;
+      this.temporalAccumulation = s.temporalAccumulation || false;
+      this.useHDREnvironment = s.useHDREnvironment || false;
+      this.environmentIntensity = s.environmentIntensity || 1.0;
+      this.environmentRotation = s.environmentRotation || 0.0;
+    }
+
+    // Load camera
+    if (sceneData.camera) {
+      const c = sceneData.camera;
+      this.camera = new Camera(
+        new Vector3(c.position.x, c.position.y, c.position.z),
+        new Vector3(c.target.x, c.target.y, c.target.z),
+        new Vector3(c.up.x, c.up.y, c.up.z),
+        c.fov,
+        c.aspect
+      );
+    }
+
+    // Load objects
+    if (sceneData.objects) {
+      for (const objData of sceneData.objects) {
+        this.deserializeObject(objData);
+      }
+    }
+
+    // Load lights
+    if (sceneData.lights) {
+      for (const lightData of sceneData.lights) {
+        this.lights.push(new Light(
+          new Vector3(lightData.position.x, lightData.position.y, lightData.position.z),
+          new Vector3(lightData.color.x, lightData.color.y, lightData.color.z),
+          lightData.intensity
+        ));
+      }
+    }
+
+    // Load animation
+    if (sceneData.animation) {
+      this.useKeyframes = sceneData.animation.useKeyframes || false;
+      this.animationSystem.duration = sceneData.animation.duration || 5.0;
+      
+      if (sceneData.animation.keyframes) {
+        for (const kfData of sceneData.animation.keyframes) {
+          const keyframe = new Keyframe(kfData.time);
+          
+          for (const [index, transform] of Object.entries(kfData.transformations)) {
+            const transformation = {};
+            if (transform.position) {
+              transformation.position = new Vector3(transform.position.x, transform.position.y, transform.position.z);
+            }
+            if (transform.rotation) {
+              transformation.rotation = new Vector3(transform.rotation.x, transform.rotation.y, transform.rotation.z);
+            }
+            if (transform.scale !== undefined) {
+              transformation.scale = transform.scale;
+            }
+            keyframe.transformations[index] = transformation;
+          }
+          
+          this.animationSystem.keyframes.push(keyframe);
+        }
+        this.animationSystem.keyframes.sort((a, b) => a.time - b.time);
+      }
+    }
+  }
+
+  deserializeObject(objData) {
+    if (objData.type === "sphere") {
+      const material = new Material({
+        albedo: new Vector3(objData.material.albedo.x, objData.material.albedo.y, objData.material.albedo.z),
+        metallic: objData.material.metallic,
+        roughness: objData.material.roughness,
+        transparency: objData.material.transparency,
+        refractiveIndex: objData.material.refractiveIndex,
+        emission: objData.material.emission ? new Vector3(objData.material.emission.x, objData.material.emission.y, objData.material.emission.z) : new Vector3(0, 0, 0)
+      });
+      
+      this.objects.push(new Sphere(
+        new Vector3(objData.center.x, objData.center.y, objData.center.z),
+        objData.radius,
+        material
+      ));
+    } else if (objData.type === "plane") {
+      const material = new Material({
+        albedo: new Vector3(objData.material.albedo.x, objData.material.albedo.y, objData.material.albedo.z),
+        metallic: objData.material.metallic,
+        roughness: objData.material.roughness,
+        transparency: objData.material.transparency,
+        refractiveIndex: objData.material.refractiveIndex,
+        emission: objData.material.emission ? new Vector3(objData.material.emission.x, objData.material.emission.y, objData.material.emission.z) : new Vector3(0, 0, 0)
+      });
+      
+      this.objects.push(new Plane(
+        new Vector3(objData.point.x, objData.point.y, objData.point.z),
+        new Vector3(objData.normal.x, objData.normal.y, objData.normal.z),
+        material
+      ));
+    } else if (objData.type === "mesh") {
+      const material = new Material({
+        albedo: new Vector3(objData.material.albedo.x, objData.material.albedo.y, objData.material.albedo.z),
+        metallic: objData.material.metallic,
+        roughness: objData.material.roughness,
+        transparency: objData.material.transparency,
+        refractiveIndex: objData.material.refractiveIndex,
+        emission: objData.material.emission ? new Vector3(objData.material.emission.x, objData.material.emission.y, objData.material.emission.z) : new Vector3(0, 0, 0)
+      });
+      
+      const vertices = objData.vertices.map(v => new Vector3(v.x, v.y, v.z));
+      this.objects.push(new Mesh(vertices, objData.faces, material));
+    } else if (objData.type === "volume") {
+      const material = new VolumeMaterial({
+        density: objData.material.density,
+        absorption: new Vector3(objData.material.absorption.x, objData.material.absorption.y, objData.material.absorption.z),
+        scattering: new Vector3(objData.material.scattering.x, objData.material.scattering.y, objData.material.scattering.z),
+        emission: new Vector3(objData.material.emission.x, objData.material.emission.y, objData.material.emission.z),
+        phaseFunction: objData.material.phaseFunction
+      });
+      
+      this.objects.push(new VolumetricBox(
+        new Vector3(objData.min.x, objData.min.y, objData.min.z),
+        new Vector3(objData.max.x, objData.max.y, objData.max.z),
+        material
+      ));
+    }
+  }
+
   toggleAnimation() {
     this.isAnimating = !this.isAnimating;
     const button = document.getElementById("toggle-animation");
@@ -1808,6 +2010,18 @@ class UIController {
 
     document.getElementById("add-volume").addEventListener("click", () => {
       this.addVolume();
+    });
+
+    document.getElementById("save-scene").addEventListener("click", () => {
+      this.saveScene();
+    });
+
+    document.getElementById("load-scene").addEventListener("click", () => {
+      document.getElementById("scene-file-input").click();
+    });
+
+    document.getElementById("scene-file-input").addEventListener("change", (e) => {
+      this.handleSceneLoad(e);
     });
 
     document.getElementById("add-light").addEventListener("click", () => {
@@ -2152,6 +2366,98 @@ class UIController {
     this.raytracer.useKeyframes = true;
     
     console.log('Demo animation created with circular motion');
+  }
+
+  saveScene() {
+    try {
+      const sceneData = this.raytracer.serializeScene();
+      const jsonString = JSON.stringify(sceneData, null, 2);
+      
+      const blob = new Blob([jsonString], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `raytracer-scene-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      
+      URL.revokeObjectURL(url);
+      console.log('Scene saved successfully');
+    } catch (error) {
+      console.error('Error saving scene:', error);
+      alert('Error saving scene: ' + error.message);
+    }
+  }
+
+  async handleSceneLoad(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    if (!file.name.toLowerCase().endsWith('.json')) {
+      alert('Please select a JSON scene file');
+      return;
+    }
+
+    try {
+      const text = await file.text();
+      const sceneData = JSON.parse(text);
+      
+      this.raytracer.loadScene(sceneData);
+      this.updateObjectsList();
+      this.updateLightsList();
+      this.syncUIWithSettings();
+      
+      if (!this.raytracer.isAnimating) {
+        this.raytracer.render();
+      }
+      
+      console.log('Scene loaded successfully');
+    } catch (error) {
+      console.error('Error loading scene:', error);
+      alert('Error loading scene: ' + error.message);
+    }
+  }
+
+  syncUIWithSettings() {
+    // Update UI controls to match loaded settings
+    document.getElementById("max-bounces").value = this.raytracer.maxBounces;
+    document.getElementById("bounces-value").textContent = this.raytracer.maxBounces;
+    
+    document.getElementById("anti-aliasing").value = this.raytracer.antiAliasingSamples;
+    document.getElementById("aa-value").textContent = this.raytracer.antiAliasingSamples;
+    
+    document.getElementById("ambient-light").value = this.raytracer.ambientLight;
+    document.getElementById("ambient-value").textContent = this.raytracer.ambientLight;
+    
+    document.getElementById("importance-sampling").checked = this.raytracer.useImportanceSampling;
+    document.getElementById("indirect-samples").value = this.raytracer.indirectSamples;
+    document.getElementById("indirect-value").textContent = this.raytracer.indirectSamples;
+    
+    document.getElementById("denoising").checked = this.raytracer.useDenoising;
+    document.getElementById("temporal-accumulation").checked = this.raytracer.temporalAccumulation;
+    document.getElementById("denoising-strength").value = this.raytracer.denoisingStrength;
+    document.getElementById("denoising-value").textContent = this.raytracer.denoisingStrength;
+    
+    document.getElementById("hdr-environment").checked = this.raytracer.useHDREnvironment;
+    document.getElementById("env-intensity").value = this.raytracer.environmentIntensity;
+    document.getElementById("env-intensity-value").textContent = this.raytracer.environmentIntensity;
+    
+    const rotationDegrees = this.raytracer.environmentRotation * 180 / Math.PI;
+    document.getElementById("env-rotation").value = rotationDegrees;
+    document.getElementById("env-rotation-value").textContent = rotationDegrees.toFixed(0) + "°";
+    
+    document.getElementById("use-keyframes").checked = this.raytracer.useKeyframes;
+    document.getElementById("animation-duration").value = this.raytracer.animationSystem.duration;
+    document.getElementById("duration-value").textContent = this.raytracer.animationSystem.duration + "s";
+    
+    // Convert background color to hex
+    const r = Math.round(this.raytracer.backgroundColor.x * 255);
+    const g = Math.round(this.raytracer.backgroundColor.y * 255);
+    const b = Math.round(this.raytracer.backgroundColor.z * 255);
+    const hex = "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+    document.getElementById("bg-color").value = hex;
   }
 }
 
