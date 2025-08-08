@@ -71,21 +71,25 @@ class Vector3 {
   static randomCosineWeightedHemisphere(normal) {
     const r1 = Math.random();
     const r2 = Math.random();
-    
+
     const cosTheta = Math.sqrt(r1);
     const sinTheta = Math.sqrt(1 - r1);
     const phi = 2 * Math.PI * r2;
-    
+
     const x = sinTheta * Math.cos(phi);
     const y = sinTheta * Math.sin(phi);
     const z = cosTheta;
-    
+
     // Create local coordinate system
-    const up = Math.abs(normal.z) < 0.9 ? new Vector3(0, 0, 1) : new Vector3(1, 0, 0);
+    const up =
+      Math.abs(normal.z) < 0.9 ? new Vector3(0, 0, 1) : new Vector3(1, 0, 0);
     const tangent = normal.cross(up).normalize();
     const bitangent = normal.cross(tangent);
-    
-    return tangent.multiply(x).add(bitangent.multiply(y)).add(normal.multiply(z));
+
+    return tangent
+      .multiply(x)
+      .add(bitangent.multiply(y))
+      .add(normal.multiply(z));
   }
 
   static randomUnitSphere() {
@@ -176,7 +180,7 @@ class Triangle {
     this.v2 = v2;
     this.material = material;
     this.type = "triangle";
-    
+
     // Pre-calculate normal
     const edge1 = v1.subtract(v0);
     const edge2 = v2.subtract(v0);
@@ -189,22 +193,22 @@ class Triangle {
     const edge2 = this.v2.subtract(this.v0);
     const h = ray.direction.cross(edge2);
     const a = edge1.dot(h);
-    
+
     if (a > -epsilon && a < epsilon) return null;
-    
+
     const f = 1.0 / a;
     const s = ray.origin.subtract(this.v0);
     const u = f * s.dot(h);
-    
+
     if (u < 0.0 || u > 1.0) return null;
-    
+
     const q = s.cross(edge1);
     const v = f * ray.direction.dot(q);
-    
+
     if (v < 0.0 || u + v > 1.0) return null;
-    
+
     const t = f * edge2.dot(q);
-    
+
     if (t > epsilon) {
       const point = ray.at(t);
       return {
@@ -214,7 +218,7 @@ class Triangle {
         material: this.material,
       };
     }
-    
+
     return null;
   }
 }
@@ -226,7 +230,7 @@ class Mesh {
     this.material = material;
     this.type = "mesh";
     this.triangles = [];
-    
+
     // Convert faces to triangles
     for (const face of faces) {
       if (face.length >= 3) {
@@ -269,36 +273,42 @@ class VolumetricBox {
 
   intersect(ray) {
     const epsilon = 1e-6;
-    
+
     // Ray-box intersection using slab method
     const invDir = new Vector3(
       1.0 / ray.direction.x,
       1.0 / ray.direction.y,
       1.0 / ray.direction.z
     );
-    
+
     const t1x = (this.min.x - ray.origin.x) * invDir.x;
     const t2x = (this.max.x - ray.origin.x) * invDir.x;
     const t1y = (this.min.y - ray.origin.y) * invDir.y;
     const t2y = (this.max.y - ray.origin.y) * invDir.y;
     const t1z = (this.min.z - ray.origin.z) * invDir.z;
     const t2z = (this.max.z - ray.origin.z) * invDir.z;
-    
-    const tmin = Math.max(Math.max(Math.min(t1x, t2x), Math.min(t1y, t2y)), Math.min(t1z, t2z));
-    const tmax = Math.min(Math.min(Math.max(t1x, t2x), Math.max(t1y, t2y)), Math.max(t1z, t2z));
-    
+
+    const tmin = Math.max(
+      Math.max(Math.min(t1x, t2x), Math.min(t1y, t2y)),
+      Math.min(t1z, t2z)
+    );
+    const tmax = Math.min(
+      Math.min(Math.max(t1x, t2x), Math.max(t1y, t2y)),
+      Math.max(t1z, t2z)
+    );
+
     if (tmax < 0 || tmin > tmax) return null;
-    
+
     const tNear = tmin > epsilon ? tmin : epsilon;
     const tFar = tmax;
-    
+
     if (tNear >= tFar) return null;
-    
+
     return {
       tNear: tNear,
       tFar: tFar,
       material: this.material,
-      type: "volume"
+      type: "volume",
     };
   }
 }
@@ -306,7 +316,7 @@ class VolumetricBox {
 class HDREnvironmentMap {
   constructor(canvas) {
     this.canvas = canvas;
-    this.ctx = canvas.getContext('2d');
+    this.ctx = canvas.getContext("2d");
     this.imageData = null;
     this.width = 0;
     this.height = 0;
@@ -315,7 +325,7 @@ class HDREnvironmentMap {
   async loadFromURL(url) {
     return new Promise((resolve, reject) => {
       const img = new Image();
-      img.crossOrigin = 'anonymous';
+      img.crossOrigin = "anonymous";
       img.onload = () => {
         this.width = img.width;
         this.height = img.height;
@@ -338,19 +348,19 @@ class HDREnvironmentMap {
     // Convert direction to spherical coordinates
     const theta = Math.atan2(direction.z, direction.x) + rotation;
     const phi = Math.acos(Math.max(-1, Math.min(1, direction.y)));
-    
+
     // Map to texture coordinates
     const u = (theta + Math.PI) / (2 * Math.PI);
     const v = phi / Math.PI;
-    
+
     const x = Math.floor(u * this.width) % this.width;
     const y = Math.floor(v * this.height) % this.height;
-    
+
     const index = (y * this.width + x) * 4;
     const r = this.imageData.data[index] / 255.0;
     const g = this.imageData.data[index + 1] / 255.0;
     const b = this.imageData.data[index + 2] / 255.0;
-    
+
     return new Vector3(r, g, b);
   }
 }
@@ -379,7 +389,7 @@ class AnimationSystem {
   }
 
   addKeyframe(time, objectIndex, transformation) {
-    let keyframe = this.keyframes.find(kf => kf.time === time);
+    let keyframe = this.keyframes.find((kf) => kf.time === time);
     if (!keyframe) {
       keyframe = new Keyframe(time);
       this.keyframes.push(keyframe);
@@ -389,7 +399,7 @@ class AnimationSystem {
   }
 
   removeKeyframe(time) {
-    this.keyframes = this.keyframes.filter(kf => kf.time !== time);
+    this.keyframes = this.keyframes.filter((kf) => kf.time !== time);
   }
 
   interpolate(time) {
@@ -397,32 +407,37 @@ class AnimationSystem {
 
     // Wrap time to loop
     const wrappedTime = time % this.duration;
-    
+
     // Find surrounding keyframes
     let prevKeyframe = this.keyframes[this.keyframes.length - 1];
     let nextKeyframe = this.keyframes[0];
-    
+
     for (let i = 0; i < this.keyframes.length - 1; i++) {
-      if (wrappedTime >= this.keyframes[i].time && wrappedTime <= this.keyframes[i + 1].time) {
+      if (
+        wrappedTime >= this.keyframes[i].time &&
+        wrappedTime <= this.keyframes[i + 1].time
+      ) {
         prevKeyframe = this.keyframes[i];
         nextKeyframe = this.keyframes[i + 1];
         break;
       }
     }
 
-    const t = (wrappedTime - prevKeyframe.time) / (nextKeyframe.time - prevKeyframe.time);
+    const t =
+      (wrappedTime - prevKeyframe.time) /
+      (nextKeyframe.time - prevKeyframe.time);
     const result = {};
 
     // Interpolate transformations for each object
     const allObjectIndices = new Set([
       ...Object.keys(prevKeyframe.transformations),
-      ...Object.keys(nextKeyframe.transformations)
+      ...Object.keys(nextKeyframe.transformations),
     ]);
 
     for (const objectIndex of allObjectIndices) {
       const prev = prevKeyframe.transformations[objectIndex];
       const next = nextKeyframe.transformations[objectIndex];
-      
+
       if (prev && next) {
         result[objectIndex] = this.interpolateTransformation(prev, next, t);
       } else if (prev) {
@@ -437,15 +452,15 @@ class AnimationSystem {
 
   interpolateTransformation(prev, next, t) {
     const result = {};
-    
+
     if (prev.position && next.position) {
       result.position = prev.position.lerp(next.position, t);
     }
-    
+
     if (prev.rotation && next.rotation) {
       result.rotation = prev.rotation.lerp(next.rotation, t);
     }
-    
+
     if (prev.scale !== undefined && next.scale !== undefined) {
       result.scale = prev.scale * (1 - t) + next.scale * t;
     }
@@ -463,21 +478,23 @@ class OBJLoader {
   static parseOBJ(objText) {
     const vertices = [];
     const faces = [];
-    const lines = objText.split('\n');
+    const lines = objText.split("\n");
 
     for (const line of lines) {
       const parts = line.trim().split(/\s+/);
-      if (parts[0] === 'v') {
+      if (parts[0] === "v") {
         // Vertex
-        vertices.push(new Vector3(
-          parseFloat(parts[1]),
-          parseFloat(parts[2]),
-          parseFloat(parts[3])
-        ));
-      } else if (parts[0] === 'f') {
+        vertices.push(
+          new Vector3(
+            parseFloat(parts[1]),
+            parseFloat(parts[2]),
+            parseFloat(parts[3])
+          )
+        );
+      } else if (parts[0] === "f") {
         // Face (convert to 0-based indices)
-        const face = parts.slice(1).map(part => {
-          const vertexIndex = parseInt(part.split('/')[0]) - 1;
+        const face = parts.slice(1).map((part) => {
+          const vertexIndex = parseInt(part.split("/")[0]) - 1;
           return vertexIndex;
         });
         faces.push(face);
@@ -589,18 +606,18 @@ class RayTracer {
     this.ambientLight = 0.1;
     this.useWorkers = navigator.hardwareConcurrency > 1;
     this.numWorkers = Math.min(navigator.hardwareConcurrency || 4, 8);
-    
+
     // Importance sampling settings
     this.useImportanceSampling = false;
     this.indirectSamples = 1;
-    
+
     // Denoising settings
     this.useDenoising = false;
     this.denoisingStrength = 1.0;
     this.temporalAccumulation = false;
     this.previousFrame = null;
     this.frameAccumulation = 0;
-    
+
     // HDR Environment mapping
     this.useHDREnvironment = false;
     this.environmentMap = null;
@@ -632,7 +649,7 @@ class RayTracer {
     this.isAnimating = false;
     this.animationTime = 0;
     this.animationSpeed = 1.0;
-    
+
     // Keyframe animation system
     this.useKeyframes = false;
     this.keyframes = [];
@@ -645,7 +662,7 @@ class RayTracer {
     this.initWorkers();
 
     // Initialize HDR environment canvas
-    this.hdrCanvas = document.createElement('canvas');
+    this.hdrCanvas = document.createElement("canvas");
     this.environmentMap = new HDREnvironmentMap(this.hdrCanvas);
 
     // Initialize animation system
@@ -879,16 +896,19 @@ class RayTracer {
     // Check for volume intersections first
     const volumeIntersection = this.intersectVolumes(ray);
     let volumeColor = new Vector3(0, 0, 0);
-    
+
     if (volumeIntersection) {
       volumeColor = this.sampleVolume(ray, volumeIntersection, depth);
     }
 
     const intersection = this.intersectScene(ray);
     if (!intersection) {
-      const environmentColor = this.useHDREnvironment && this.environmentMap
-        ? this.environmentMap.sample(ray.direction, this.environmentRotation).multiply(this.environmentIntensity)
-        : this.backgroundColor;
+      const environmentColor =
+        this.useHDREnvironment && this.environmentMap
+          ? this.environmentMap
+              .sample(ray.direction, this.environmentRotation)
+              .multiply(this.environmentIntensity)
+          : this.backgroundColor;
       return environmentColor.add(volumeColor);
     }
 
@@ -899,7 +919,13 @@ class RayTracer {
 
     // Add indirect lighting using importance sampling
     if (this.useImportanceSampling && depth < this.maxBounces - 1) {
-      const indirectColor = this.calculateIndirectLighting(ray, point, normal, material, depth);
+      const indirectColor = this.calculateIndirectLighting(
+        ray,
+        point,
+        normal,
+        material,
+        depth
+      );
       color = color.add(indirectColor);
     }
 
@@ -944,24 +970,24 @@ class RayTracer {
     for (let sample = 0; sample < this.indirectSamples; sample++) {
       // Use cosine-weighted hemisphere sampling for better results
       const sampleDirection = Vector3.randomCosineWeightedHemisphere(normal);
-      
+
       const indirectRay = new Ray(
         point.add(normal.multiply(epsilon)),
         sampleDirection
       );
-      
+
       const indirectRadiance = this.trace(indirectRay, depth + 1);
-      
+
       // BRDF weighting (simple Lambertian)
       const brdf = material.albedo.multiply(1.0 / Math.PI);
-      
+
       // Monte Carlo integration with cosine-weighted sampling
       // pdf = cosTheta / π, so cosTheta / pdf = π
       indirectColor = indirectColor.add(
         indirectRadiance.multiply(brdf.x).multiply(Math.PI)
       );
     }
-    
+
     return indirectColor.divide(this.indirectSamples);
   }
 
@@ -982,7 +1008,7 @@ class RayTracer {
     return closest;
   }
 
-  sampleVolume(ray, volumeIntersection, depth) {
+  sampleVolume(ray, volumeIntersection) {
     const { tNear, tFar, material } = volumeIntersection;
     const stepSize = 0.1;
     const steps = Math.ceil((tFar - tNear) / stepSize);
@@ -996,19 +1022,25 @@ class RayTracer {
       const point = ray.at(t);
       const density = material.density;
       const extinction = material.absorption.add(material.scattering);
-      
+
       // Sample lighting at this point
       const lightContribution = this.sampleVolumeLight(point, material);
-      
+
       // Add emission
-      color = color.add(material.emission.multiply(density * stepSize * transmittance));
-      
+      color = color.add(
+        material.emission.multiply(density * stepSize * transmittance)
+      );
+
       // Add scattering
-      color = color.add(lightContribution.multiply(material.scattering).multiply(density * stepSize * transmittance));
-      
+      color = color.add(
+        lightContribution
+          .multiply(material.scattering)
+          .multiply(density * stepSize * transmittance)
+      );
+
       // Update transmittance
       transmittance *= Math.exp(-extinction.length() * density * stepSize);
-      
+
       if (transmittance < 0.001) break; // Early termination
     }
 
@@ -1017,71 +1049,75 @@ class RayTracer {
 
   sampleVolumeLight(point, _material) {
     let color = new Vector3(0, 0, 0);
-    
+
     for (const light of this.lights) {
       const lightDistance = light.position.subtract(point).length();
-      
+
       // Simple phase function (isotropic scattering)
       const phaseValue = 1.0 / (4.0 * Math.PI);
-      
+
       const attenuation = 1.0 / (1.0 + lightDistance * lightDistance * 0.01);
-      color = color.add(light.color.multiply(light.intensity * attenuation * phaseValue));
+      color = color.add(
+        light.color.multiply(light.intensity * attenuation * phaseValue)
+      );
     }
-    
+
     return color;
   }
 
   applyDenoising() {
     const denoisedData = new Uint8ClampedArray(this.imageData.data);
-    
+
     if (this.temporalAccumulation && this.previousFrame) {
       this.applyTemporalDenoising(denoisedData);
     } else {
       this.applySpatialDenoising(denoisedData);
     }
-    
+
     // Store current frame for temporal accumulation
     if (this.temporalAccumulation) {
       this.previousFrame = new Uint8ClampedArray(this.imageData.data);
       this.frameAccumulation = Math.min(this.frameAccumulation + 1, 16);
     }
-    
+
     this.imageData.data.set(denoisedData);
   }
 
   applySpatialDenoising(data) {
     const kernel = [
       [1, 2, 1],
-      [2, 4, 2], 
-      [1, 2, 1]
+      [2, 4, 2],
+      [1, 2, 1],
     ];
     const kernelSum = 16;
     const strength = this.denoisingStrength;
-    
+
     for (let y = 1; y < this.height - 1; y++) {
       for (let x = 1; x < this.width - 1; x++) {
         const index = (y * this.width + x) * 4;
-        
-        let r = 0, g = 0, b = 0;
-        
+
+        let r = 0,
+          g = 0,
+          b = 0;
+
         for (let ky = -1; ky <= 1; ky++) {
           for (let kx = -1; kx <= 1; kx++) {
             const px = x + kx;
             const py = y + ky;
             const pIndex = (py * this.width + px) * 4;
             const weight = kernel[ky + 1][kx + 1];
-            
+
             r += this.imageData.data[pIndex] * weight;
             g += this.imageData.data[pIndex + 1] * weight;
             b += this.imageData.data[pIndex + 2] * weight;
           }
         }
-        
+
         // Blend between original and filtered
         const originalR = this.imageData.data[index];
         const originalG = this.imageData.data[index + 1];
         const originalB = this.imageData.data[index + 2];
-        
+
         data[index] = originalR + (r / kernelSum - originalR) * strength;
         data[index + 1] = originalG + (g / kernelSum - originalG) * strength;
         data[index + 2] = originalB + (b / kernelSum - originalB) * strength;
@@ -1092,12 +1128,17 @@ class RayTracer {
 
   applyTemporalDenoising(data) {
     const alpha = 1.0 / (this.frameAccumulation + 1);
-    
+
     for (let i = 0; i < data.length; i += 4) {
       // Temporal accumulation with exponential moving average
-      data[i] = this.previousFrame[i] * (1 - alpha) + this.imageData.data[i] * alpha;
-      data[i + 1] = this.previousFrame[i + 1] * (1 - alpha) + this.imageData.data[i + 1] * alpha;
-      data[i + 2] = this.previousFrame[i + 2] * (1 - alpha) + this.imageData.data[i + 2] * alpha;
+      data[i] =
+        this.previousFrame[i] * (1 - alpha) + this.imageData.data[i] * alpha;
+      data[i + 1] =
+        this.previousFrame[i + 1] * (1 - alpha) +
+        this.imageData.data[i + 1] * alpha;
+      data[i + 2] =
+        this.previousFrame[i + 2] * (1 - alpha) +
+        this.imageData.data[i + 2] * alpha;
       data[i + 3] = this.imageData.data[i + 3];
     }
   }
@@ -1182,7 +1223,7 @@ class RayTracer {
       if (this.useDenoising) {
         this.applyDenoising();
       }
-      
+
       this.ctx.putImageData(this.imageData, 0, 0);
       this.renderTime = performance.now() - startTime;
       this.updatePerformanceStats();
@@ -1258,12 +1299,12 @@ class RayTracer {
             completedWorkers === Math.ceil(this.height / rowsPerWorker)
           ) {
             clearTimeout(renderTimeout);
-            
+
             // Apply denoising if enabled
             if (this.useDenoising) {
               this.applyDenoising();
             }
-            
+
             this.ctx.putImageData(this.imageData, 0, 0);
             this.renderTime = performance.now() - startTime;
             this.updatePerformanceStats();
@@ -1352,7 +1393,7 @@ class RayTracer {
     } else if (obj.type === "mesh") {
       return {
         type: "mesh",
-        vertices: obj.vertices.map(v => ({ x: v.x, y: v.y, z: v.z })),
+        vertices: obj.vertices.map((v) => ({ x: v.x, y: v.y, z: v.z })),
         faces: obj.faces,
         material: {
           albedo: {
@@ -1438,7 +1479,9 @@ class RayTracer {
 
     if (this.useKeyframes && this.animationSystem.keyframes.length > 0) {
       // Apply keyframe animations
-      const transformations = this.animationSystem.interpolate(this.animationTime);
+      const transformations = this.animationSystem.interpolate(
+        this.animationTime
+      );
       this.applyTransformations(transformations);
     } else {
       // Default procedural animation
@@ -1459,15 +1502,17 @@ class RayTracer {
   }
 
   applyTransformations(transformations) {
-    for (const [objectIndex, transformation] of Object.entries(transformations)) {
+    for (const [objectIndex, transformation] of Object.entries(
+      transformations
+    )) {
       const index = parseInt(objectIndex);
       if (index >= 0 && index < this.objects.length) {
         const object = this.objects[index];
-        
+
         if (transformation.position && object.center) {
           object.center = transformation.position;
         }
-        
+
         if (transformation.scale && object.radius !== undefined) {
           object.radius = transformation.scale;
         }
@@ -1493,7 +1538,7 @@ class RayTracer {
         backgroundColor: {
           x: this.backgroundColor.x,
           y: this.backgroundColor.y,
-          z: this.backgroundColor.z
+          z: this.backgroundColor.z,
         },
         ambientLight: this.ambientLight,
         useImportanceSampling: this.useImportanceSampling,
@@ -1503,38 +1548,62 @@ class RayTracer {
         temporalAccumulation: this.temporalAccumulation,
         useHDREnvironment: this.useHDREnvironment,
         environmentIntensity: this.environmentIntensity,
-        environmentRotation: this.environmentRotation
+        environmentRotation: this.environmentRotation,
       },
       camera: {
-        position: { x: this.camera.position.x, y: this.camera.position.y, z: this.camera.position.z },
-        target: { x: this.camera.target.x, y: this.camera.target.y, z: this.camera.target.z },
+        position: {
+          x: this.camera.position.x,
+          y: this.camera.position.y,
+          z: this.camera.position.z,
+        },
+        target: {
+          x: this.camera.target.x,
+          y: this.camera.target.y,
+          z: this.camera.target.z,
+        },
         up: { x: this.camera.up.x, y: this.camera.up.y, z: this.camera.up.z },
         fov: this.camera.fov,
-        aspect: this.camera.aspect
+        aspect: this.camera.aspect,
       },
-      objects: this.objects.map(obj => this.serializeObject(obj)),
-      lights: this.lights.map(light => ({
-        position: { x: light.position.x, y: light.position.y, z: light.position.z },
+      objects: this.objects.map((obj) => this.serializeObject(obj)),
+      lights: this.lights.map((light) => ({
+        position: {
+          x: light.position.x,
+          y: light.position.y,
+          z: light.position.z,
+        },
         color: { x: light.color.x, y: light.color.y, z: light.color.z },
-        intensity: light.intensity
+        intensity: light.intensity,
       })),
       animation: {
         useKeyframes: this.useKeyframes,
         duration: this.animationSystem.duration,
-        keyframes: this.animationSystem.keyframes.map(kf => ({
+        keyframes: this.animationSystem.keyframes.map((kf) => ({
           time: kf.time,
           transformations: Object.fromEntries(
             Object.entries(kf.transformations).map(([index, transform]) => [
               index,
               {
-                position: transform.position ? { x: transform.position.x, y: transform.position.y, z: transform.position.z } : null,
-                rotation: transform.rotation ? { x: transform.rotation.x, y: transform.rotation.y, z: transform.rotation.z } : null,
-                scale: transform.scale
-              }
+                position: transform.position
+                  ? {
+                      x: transform.position.x,
+                      y: transform.position.y,
+                      z: transform.position.z,
+                    }
+                  : null,
+                rotation: transform.rotation
+                  ? {
+                      x: transform.rotation.x,
+                      y: transform.rotation.y,
+                      z: transform.rotation.z,
+                    }
+                  : null,
+                scale: transform.scale,
+              },
             ])
-          )
-        }))
-      }
+          ),
+        })),
+      },
     };
   }
 
@@ -1553,7 +1622,11 @@ class RayTracer {
       const s = sceneData.settings;
       this.maxBounces = s.maxBounces || 3;
       this.antiAliasingSamples = s.antiAliasingSamples || 1;
-      this.backgroundColor = new Vector3(s.backgroundColor?.x || 0.05, s.backgroundColor?.y || 0.05, s.backgroundColor?.z || 0.1);
+      this.backgroundColor = new Vector3(
+        s.backgroundColor?.x || 0.05,
+        s.backgroundColor?.y || 0.05,
+        s.backgroundColor?.z || 0.1
+      );
       this.ambientLight = s.ambientLight || 0.1;
       this.useImportanceSampling = s.useImportanceSampling || false;
       this.indirectSamples = s.indirectSamples || 1;
@@ -1587,11 +1660,21 @@ class RayTracer {
     // Load lights
     if (sceneData.lights) {
       for (const lightData of sceneData.lights) {
-        this.lights.push(new Light(
-          new Vector3(lightData.position.x, lightData.position.y, lightData.position.z),
-          new Vector3(lightData.color.x, lightData.color.y, lightData.color.z),
-          lightData.intensity
-        ));
+        this.lights.push(
+          new Light(
+            new Vector3(
+              lightData.position.x,
+              lightData.position.y,
+              lightData.position.z
+            ),
+            new Vector3(
+              lightData.color.x,
+              lightData.color.y,
+              lightData.color.z
+            ),
+            lightData.intensity
+          )
+        );
       }
     }
 
@@ -1599,25 +1682,35 @@ class RayTracer {
     if (sceneData.animation) {
       this.useKeyframes = sceneData.animation.useKeyframes || false;
       this.animationSystem.duration = sceneData.animation.duration || 5.0;
-      
+
       if (sceneData.animation.keyframes) {
         for (const kfData of sceneData.animation.keyframes) {
           const keyframe = new Keyframe(kfData.time);
-          
-          for (const [index, transform] of Object.entries(kfData.transformations)) {
+
+          for (const [index, transform] of Object.entries(
+            kfData.transformations
+          )) {
             const transformation = {};
             if (transform.position) {
-              transformation.position = new Vector3(transform.position.x, transform.position.y, transform.position.z);
+              transformation.position = new Vector3(
+                transform.position.x,
+                transform.position.y,
+                transform.position.z
+              );
             }
             if (transform.rotation) {
-              transformation.rotation = new Vector3(transform.rotation.x, transform.rotation.y, transform.rotation.z);
+              transformation.rotation = new Vector3(
+                transform.rotation.x,
+                transform.rotation.y,
+                transform.rotation.z
+              );
             }
             if (transform.scale !== undefined) {
               transformation.scale = transform.scale;
             }
             keyframe.transformations[index] = transformation;
           }
-          
+
           this.animationSystem.keyframes.push(keyframe);
         }
         this.animationSystem.keyframes.sort((a, b) => a.time - b.time);
@@ -1628,60 +1721,108 @@ class RayTracer {
   deserializeObject(objData) {
     if (objData.type === "sphere") {
       const material = new Material({
-        albedo: new Vector3(objData.material.albedo.x, objData.material.albedo.y, objData.material.albedo.z),
+        albedo: new Vector3(
+          objData.material.albedo.x,
+          objData.material.albedo.y,
+          objData.material.albedo.z
+        ),
         metallic: objData.material.metallic,
         roughness: objData.material.roughness,
         transparency: objData.material.transparency,
         refractiveIndex: objData.material.refractiveIndex,
-        emission: objData.material.emission ? new Vector3(objData.material.emission.x, objData.material.emission.y, objData.material.emission.z) : new Vector3(0, 0, 0)
+        emission: objData.material.emission
+          ? new Vector3(
+              objData.material.emission.x,
+              objData.material.emission.y,
+              objData.material.emission.z
+            )
+          : new Vector3(0, 0, 0),
       });
-      
-      this.objects.push(new Sphere(
-        new Vector3(objData.center.x, objData.center.y, objData.center.z),
-        objData.radius,
-        material
-      ));
+
+      this.objects.push(
+        new Sphere(
+          new Vector3(objData.center.x, objData.center.y, objData.center.z),
+          objData.radius,
+          material
+        )
+      );
     } else if (objData.type === "plane") {
       const material = new Material({
-        albedo: new Vector3(objData.material.albedo.x, objData.material.albedo.y, objData.material.albedo.z),
+        albedo: new Vector3(
+          objData.material.albedo.x,
+          objData.material.albedo.y,
+          objData.material.albedo.z
+        ),
         metallic: objData.material.metallic,
         roughness: objData.material.roughness,
         transparency: objData.material.transparency,
         refractiveIndex: objData.material.refractiveIndex,
-        emission: objData.material.emission ? new Vector3(objData.material.emission.x, objData.material.emission.y, objData.material.emission.z) : new Vector3(0, 0, 0)
+        emission: objData.material.emission
+          ? new Vector3(
+              objData.material.emission.x,
+              objData.material.emission.y,
+              objData.material.emission.z
+            )
+          : new Vector3(0, 0, 0),
       });
-      
-      this.objects.push(new Plane(
-        new Vector3(objData.point.x, objData.point.y, objData.point.z),
-        new Vector3(objData.normal.x, objData.normal.y, objData.normal.z),
-        material
-      ));
+
+      this.objects.push(
+        new Plane(
+          new Vector3(objData.point.x, objData.point.y, objData.point.z),
+          new Vector3(objData.normal.x, objData.normal.y, objData.normal.z),
+          material
+        )
+      );
     } else if (objData.type === "mesh") {
       const material = new Material({
-        albedo: new Vector3(objData.material.albedo.x, objData.material.albedo.y, objData.material.albedo.z),
+        albedo: new Vector3(
+          objData.material.albedo.x,
+          objData.material.albedo.y,
+          objData.material.albedo.z
+        ),
         metallic: objData.material.metallic,
         roughness: objData.material.roughness,
         transparency: objData.material.transparency,
         refractiveIndex: objData.material.refractiveIndex,
-        emission: objData.material.emission ? new Vector3(objData.material.emission.x, objData.material.emission.y, objData.material.emission.z) : new Vector3(0, 0, 0)
+        emission: objData.material.emission
+          ? new Vector3(
+              objData.material.emission.x,
+              objData.material.emission.y,
+              objData.material.emission.z
+            )
+          : new Vector3(0, 0, 0),
       });
-      
-      const vertices = objData.vertices.map(v => new Vector3(v.x, v.y, v.z));
+
+      const vertices = objData.vertices.map((v) => new Vector3(v.x, v.y, v.z));
       this.objects.push(new Mesh(vertices, objData.faces, material));
     } else if (objData.type === "volume") {
       const material = new VolumeMaterial({
         density: objData.material.density,
-        absorption: new Vector3(objData.material.absorption.x, objData.material.absorption.y, objData.material.absorption.z),
-        scattering: new Vector3(objData.material.scattering.x, objData.material.scattering.y, objData.material.scattering.z),
-        emission: new Vector3(objData.material.emission.x, objData.material.emission.y, objData.material.emission.z),
-        phaseFunction: objData.material.phaseFunction
+        absorption: new Vector3(
+          objData.material.absorption.x,
+          objData.material.absorption.y,
+          objData.material.absorption.z
+        ),
+        scattering: new Vector3(
+          objData.material.scattering.x,
+          objData.material.scattering.y,
+          objData.material.scattering.z
+        ),
+        emission: new Vector3(
+          objData.material.emission.x,
+          objData.material.emission.y,
+          objData.material.emission.z
+        ),
+        phaseFunction: objData.material.phaseFunction,
       });
-      
-      this.objects.push(new VolumetricBox(
-        new Vector3(objData.min.x, objData.min.y, objData.min.z),
-        new Vector3(objData.max.x, objData.max.y, objData.max.z),
-        material
-      ));
+
+      this.objects.push(
+        new VolumetricBox(
+          new Vector3(objData.min.x, objData.min.y, objData.min.z),
+          new Vector3(objData.max.x, objData.max.y, objData.max.z),
+          material
+        )
+      );
     }
   }
 
@@ -1783,10 +1924,10 @@ class RayTracer {
   async loadHDREnvironment(url) {
     try {
       await this.environmentMap.loadFromURL(url);
-      console.log('HDR environment loaded successfully');
+      console.log("HDR environment loaded successfully");
       if (!this.isAnimating) this.render();
     } catch (error) {
-      console.error('Failed to load HDR environment:', error);
+      console.error("Failed to load HDR environment:", error);
     }
   }
 
@@ -1850,7 +1991,9 @@ class UIController {
     });
 
     // Importance sampling
-    const importanceSamplingCheck = document.getElementById("importance-sampling");
+    const importanceSamplingCheck = document.getElementById(
+      "importance-sampling"
+    );
     importanceSamplingCheck.addEventListener("change", (e) => {
       this.raytracer.useImportanceSampling = e.target.checked;
       if (!this.raytracer.isAnimating) this.raytracer.render();
@@ -1928,9 +2071,11 @@ class UIController {
       document.getElementById("hdr-file-input").click();
     });
 
-    document.getElementById("hdr-file-input").addEventListener("change", (e) => {
-      this.handleHDRUpload(e);
-    });
+    document
+      .getElementById("hdr-file-input")
+      .addEventListener("change", (e) => {
+        this.handleHDRUpload(e);
+      });
 
     const envIntensitySlider = document.getElementById("env-intensity");
     const envIntensityValue = document.getElementById("env-intensity-value");
@@ -1943,7 +2088,8 @@ class UIController {
     const envRotationSlider = document.getElementById("env-rotation");
     const envRotationValue = document.getElementById("env-rotation-value");
     envRotationSlider.addEventListener("input", (e) => {
-      this.raytracer.environmentRotation = parseFloat(e.target.value) * Math.PI / 180;
+      this.raytracer.environmentRotation =
+        (parseFloat(e.target.value) * Math.PI) / 180;
       envRotationValue.textContent = e.target.value + "°";
       if (!this.raytracer.isAnimating) this.raytracer.render();
     });
@@ -2004,9 +2150,11 @@ class UIController {
       document.getElementById("mesh-file-input").click();
     });
 
-    document.getElementById("mesh-file-input").addEventListener("change", (e) => {
-      this.handleMeshUpload(e);
-    });
+    document
+      .getElementById("mesh-file-input")
+      .addEventListener("change", (e) => {
+        this.handleMeshUpload(e);
+      });
 
     document.getElementById("add-volume").addEventListener("click", () => {
       this.addVolume();
@@ -2020,9 +2168,11 @@ class UIController {
       document.getElementById("scene-file-input").click();
     });
 
-    document.getElementById("scene-file-input").addEventListener("change", (e) => {
-      this.handleSceneLoad(e);
-    });
+    document
+      .getElementById("scene-file-input")
+      .addEventListener("change", (e) => {
+        this.handleSceneLoad(e);
+      });
 
     document.getElementById("add-light").addEventListener("click", () => {
       this.addLight();
@@ -2051,22 +2201,22 @@ class UIController {
     const file = event.target.files[0];
     if (!file) return;
 
-    if (!file.name.toLowerCase().endsWith('.obj')) {
-      alert('Please select an OBJ file');
+    if (!file.name.toLowerCase().endsWith(".obj")) {
+      alert("Please select an OBJ file");
       return;
     }
 
     try {
       const { vertices, faces } = await OBJLoader.loadFromFile(file);
-      
+
       if (vertices.length === 0 || faces.length === 0) {
-        alert('Invalid OBJ file or no geometry found');
+        alert("Invalid OBJ file or no geometry found");
         return;
       }
 
       // Scale down mesh if too large
       const scale = 2.0;
-      const scaledVertices = vertices.map(v => v.multiply(scale));
+      const scaledVertices = vertices.map((v) => v.multiply(scale));
 
       const material = new Material({
         albedo: new Vector3(0.7, 0.7, 0.8),
@@ -2078,15 +2228,15 @@ class UIController {
       this.updateObjectsList();
       if (!this.raytracer.isAnimating) this.raytracer.render();
     } catch (error) {
-      console.error('Error loading mesh:', error);
-      alert('Error loading mesh file: ' + error.message);
+      console.error("Error loading mesh:", error);
+      alert("Error loading mesh file: " + error.message);
     }
   }
 
   addVolume() {
     const min = new Vector3(-1, -1, -1);
     const max = new Vector3(1, 1, 1);
-    
+
     const material = new VolumeMaterial({
       density: 0.5,
       absorption: new Vector3(0.1, 0.1, 0.1),
@@ -2103,9 +2253,9 @@ class UIController {
     const file = event.target.files[0];
     if (!file) return;
 
-    const validTypes = ['image/jpeg', 'image/jpg', 'image/png'];
+    const validTypes = ["image/jpeg", "image/jpg", "image/png"];
     if (!validTypes.includes(file.type)) {
-      alert('Please select a valid image file (JPG, PNG)');
+      alert("Please select a valid image file (JPG, PNG)");
       return;
     }
 
@@ -2113,15 +2263,15 @@ class UIController {
       const url = URL.createObjectURL(file);
       await this.raytracer.loadHDREnvironment(url);
       URL.revokeObjectURL(url);
-      
+
       // Enable HDR environment checkbox
       document.getElementById("hdr-environment").checked = true;
       this.raytracer.useHDREnvironment = true;
-      
-      console.log('HDR environment loaded and enabled');
+
+      console.log("HDR environment loaded and enabled");
     } catch (error) {
-      console.error('Error loading HDR environment:', error);
-      alert('Error loading HDR environment: ' + error.message);
+      console.error("Error loading HDR environment:", error);
+      alert("Error loading HDR environment: " + error.message);
     }
   }
 
@@ -2176,33 +2326,35 @@ class UIController {
                 `;
       } else if (object.type === "mesh") {
         panel.innerHTML = `
-                    <div class="text-sm font-medium mb-2">Mesh ${
-                      index + 1
-                    } (${object.triangles.length} triangles)</div>
+                    <div class="text-sm font-medium mb-2">Mesh ${index + 1} (${
+          object.triangles.length
+        } triangles)</div>
                     <div class="control-group">
                         <label>Metallic:</label>
                         <input type="range" min="0" max="1" step="0.1" value="${
                           object.material.metallic
-                        }" 
+                        }"
                                onchange="ui.updateObjectMetallic(${index}, this.value)">
                     </div>
                     <div class="control-group">
                         <label>Transparency:</label>
                         <input type="range" min="0" max="1" step="0.1" value="${
                           object.material.transparency
-                        }" 
+                        }"
                                onchange="ui.updateObjectTransparency(${index}, this.value)">
                     </div>
                     <button class="remove-btn" onclick="ui.removeObject(${index})">Remove</button>
                 `;
       } else if (object.type === "volume") {
         panel.innerHTML = `
-                    <div class="text-sm font-medium mb-2">Volume ${index + 1}</div>
+                    <div class="text-sm font-medium mb-2">Volume ${
+                      index + 1
+                    }</div>
                     <div class="control-group">
                         <label>Density:</label>
                         <input type="range" min="0.1" max="2" step="0.1" value="${
                           object.material.density
-                        }" 
+                        }"
                                onchange="ui.updateVolumeDensity(${index}, this.value)">
                     </div>
                     <button class="remove-btn" onclick="ui.removeObject(${index})">Remove</button>
@@ -2276,7 +2428,10 @@ class UIController {
   }
 
   updateVolumeDensity(index, value) {
-    if (this.raytracer.objects[index] && this.raytracer.objects[index].type === "volume") {
+    if (
+      this.raytracer.objects[index] &&
+      this.raytracer.objects[index].type === "volume"
+    ) {
       this.raytracer.objects[index].material.density = parseFloat(value);
       if (!this.raytracer.isAnimating) this.raytracer.render();
     }
@@ -2302,92 +2457,96 @@ class UIController {
   }
 
   addCurrentKeyframe() {
-    const currentTime = this.raytracer.animationTime % this.raytracer.animationSystem.duration;
-    
+    const currentTime =
+      this.raytracer.animationTime % this.raytracer.animationSystem.duration;
+
     // Add keyframes for all objects at current time
     for (let i = 0; i < this.raytracer.objects.length; i++) {
       const object = this.raytracer.objects[i];
       const transformation = {};
-      
+
       if (object.center) {
         transformation.position = object.center.clone();
       }
-      
+
       if (object.radius !== undefined) {
         transformation.scale = object.radius;
       }
-      
+
       this.raytracer.addKeyframe(currentTime, i, transformation);
     }
-    
+
     console.log(`Added keyframe at time ${currentTime.toFixed(2)}s`);
   }
 
   createDemoAnimation() {
     // Clear existing keyframes
     this.raytracer.animationSystem.keyframes = [];
-    
+
     if (this.raytracer.objects.length === 0) {
-      alert('Please add some objects first to create animation');
+      alert("Please add some objects first to create animation");
       return;
     }
-    
+
     const duration = this.raytracer.animationSystem.duration;
     const objectIndex = 0; // Animate first object
     const object = this.raytracer.objects[objectIndex];
-    
+
     if (object.center) {
       const originalPos = object.center.clone();
-      
+
       // Create circular motion keyframes
       for (let i = 0; i <= 4; i++) {
         const time = (duration / 4) * i;
         const angle = (Math.PI * 2 * i) / 4;
         const radius = 2.0;
-        
+
         const transformation = {
           position: new Vector3(
             originalPos.x + Math.cos(angle) * radius,
             originalPos.y + Math.sin(angle) * radius,
             originalPos.z
-          )
+          ),
         };
-        
+
         if (object.radius !== undefined) {
           transformation.scale = object.radius + Math.sin(angle) * 0.3;
         }
-        
+
         this.raytracer.addKeyframe(time, objectIndex, transformation);
       }
     }
-    
+
     // Enable keyframe animation
     document.getElementById("use-keyframes").checked = true;
     this.raytracer.useKeyframes = true;
-    
-    console.log('Demo animation created with circular motion');
+
+    console.log("Demo animation created with circular motion");
   }
 
   saveScene() {
     try {
       const sceneData = this.raytracer.serializeScene();
       const jsonString = JSON.stringify(sceneData, null, 2);
-      
-      const blob = new Blob([jsonString], { type: 'application/json' });
+
+      const blob = new Blob([jsonString], { type: "application/json" });
       const url = URL.createObjectURL(blob);
-      
-      const a = document.createElement('a');
+
+      const a = document.createElement("a");
       a.href = url;
-      a.download = `raytracer-scene-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.json`;
+      a.download = `raytracer-scene-${new Date()
+        .toISOString()
+        .slice(0, 19)
+        .replace(/:/g, "-")}.json`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      
+
       URL.revokeObjectURL(url);
-      console.log('Scene saved successfully');
+      console.log("Scene saved successfully");
     } catch (error) {
-      console.error('Error saving scene:', error);
-      alert('Error saving scene: ' + error.message);
+      console.error("Error saving scene:", error);
+      alert("Error saving scene: " + error.message);
     }
   }
 
@@ -2395,68 +2554,88 @@ class UIController {
     const file = event.target.files[0];
     if (!file) return;
 
-    if (!file.name.toLowerCase().endsWith('.json')) {
-      alert('Please select a JSON scene file');
+    if (!file.name.toLowerCase().endsWith(".json")) {
+      alert("Please select a JSON scene file");
       return;
     }
 
     try {
       const text = await file.text();
       const sceneData = JSON.parse(text);
-      
+
       this.raytracer.loadScene(sceneData);
       this.updateObjectsList();
       this.updateLightsList();
       this.syncUIWithSettings();
-      
+
       if (!this.raytracer.isAnimating) {
         this.raytracer.render();
       }
-      
-      console.log('Scene loaded successfully');
+
+      console.log("Scene loaded successfully");
     } catch (error) {
-      console.error('Error loading scene:', error);
-      alert('Error loading scene: ' + error.message);
+      console.error("Error loading scene:", error);
+      alert("Error loading scene: " + error.message);
     }
   }
 
   syncUIWithSettings() {
     // Update UI controls to match loaded settings
     document.getElementById("max-bounces").value = this.raytracer.maxBounces;
-    document.getElementById("bounces-value").textContent = this.raytracer.maxBounces;
-    
-    document.getElementById("anti-aliasing").value = this.raytracer.antiAliasingSamples;
-    document.getElementById("aa-value").textContent = this.raytracer.antiAliasingSamples;
-    
-    document.getElementById("ambient-light").value = this.raytracer.ambientLight;
-    document.getElementById("ambient-value").textContent = this.raytracer.ambientLight;
-    
-    document.getElementById("importance-sampling").checked = this.raytracer.useImportanceSampling;
-    document.getElementById("indirect-samples").value = this.raytracer.indirectSamples;
-    document.getElementById("indirect-value").textContent = this.raytracer.indirectSamples;
-    
+    document.getElementById("bounces-value").textContent =
+      this.raytracer.maxBounces;
+
+    document.getElementById("anti-aliasing").value =
+      this.raytracer.antiAliasingSamples;
+    document.getElementById("aa-value").textContent =
+      this.raytracer.antiAliasingSamples;
+
+    document.getElementById("ambient-light").value =
+      this.raytracer.ambientLight;
+    document.getElementById("ambient-value").textContent =
+      this.raytracer.ambientLight;
+
+    document.getElementById("importance-sampling").checked =
+      this.raytracer.useImportanceSampling;
+    document.getElementById("indirect-samples").value =
+      this.raytracer.indirectSamples;
+    document.getElementById("indirect-value").textContent =
+      this.raytracer.indirectSamples;
+
     document.getElementById("denoising").checked = this.raytracer.useDenoising;
-    document.getElementById("temporal-accumulation").checked = this.raytracer.temporalAccumulation;
-    document.getElementById("denoising-strength").value = this.raytracer.denoisingStrength;
-    document.getElementById("denoising-value").textContent = this.raytracer.denoisingStrength;
-    
-    document.getElementById("hdr-environment").checked = this.raytracer.useHDREnvironment;
-    document.getElementById("env-intensity").value = this.raytracer.environmentIntensity;
-    document.getElementById("env-intensity-value").textContent = this.raytracer.environmentIntensity;
-    
-    const rotationDegrees = this.raytracer.environmentRotation * 180 / Math.PI;
+    document.getElementById("temporal-accumulation").checked =
+      this.raytracer.temporalAccumulation;
+    document.getElementById("denoising-strength").value =
+      this.raytracer.denoisingStrength;
+    document.getElementById("denoising-value").textContent =
+      this.raytracer.denoisingStrength;
+
+    document.getElementById("hdr-environment").checked =
+      this.raytracer.useHDREnvironment;
+    document.getElementById("env-intensity").value =
+      this.raytracer.environmentIntensity;
+    document.getElementById("env-intensity-value").textContent =
+      this.raytracer.environmentIntensity;
+
+    const rotationDegrees =
+      (this.raytracer.environmentRotation * 180) / Math.PI;
     document.getElementById("env-rotation").value = rotationDegrees;
-    document.getElementById("env-rotation-value").textContent = rotationDegrees.toFixed(0) + "°";
-    
-    document.getElementById("use-keyframes").checked = this.raytracer.useKeyframes;
-    document.getElementById("animation-duration").value = this.raytracer.animationSystem.duration;
-    document.getElementById("duration-value").textContent = this.raytracer.animationSystem.duration + "s";
-    
+    document.getElementById("env-rotation-value").textContent =
+      rotationDegrees.toFixed(0) + "°";
+
+    document.getElementById("use-keyframes").checked =
+      this.raytracer.useKeyframes;
+    document.getElementById("animation-duration").value =
+      this.raytracer.animationSystem.duration;
+    document.getElementById("duration-value").textContent =
+      this.raytracer.animationSystem.duration + "s";
+
     // Convert background color to hex
     const r = Math.round(this.raytracer.backgroundColor.x * 255);
     const g = Math.round(this.raytracer.backgroundColor.y * 255);
     const b = Math.round(this.raytracer.backgroundColor.z * 255);
-    const hex = "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+    const hex =
+      "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
     document.getElementById("bg-color").value = hex;
   }
 }
