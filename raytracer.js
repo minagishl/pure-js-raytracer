@@ -877,6 +877,11 @@ class RayTracer {
     const rotateSpeed = 0.05;
     let shouldRender = false;
 
+    // Don't handle keys with modifier keys (allow Ctrl+R, Cmd+R, etc.)
+    if (e.ctrlKey || e.metaKey || e.altKey) {
+      return;
+    }
+
     // Prevent default browser behavior for handled keys
     const handledKeys = [
       "Space",
