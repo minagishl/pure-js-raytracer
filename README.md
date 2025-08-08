@@ -120,18 +120,18 @@ Extend the ray tracer by implementing new primitive types:
 
 ```javascript
 class Triangle {
-	constructor(v0, v1, v2, material) {
-		this.v0 = v0;
-		this.v1 = v1;
-		this.v2 = v2;
-		this.material = material;
-		this.type = 'triangle';
-	}
+  constructor(v0, v1, v2, material) {
+    this.v0 = v0;
+    this.v1 = v1;
+    this.v2 = v2;
+    this.material = material;
+    this.type = "triangle";
+  }
 
-	intersect(ray) {
-		// Implement ray-triangle intersection
-		// Return intersection data or null
-	}
+  intersect(ray) {
+    // Implement ray-triangle intersection
+    // Return intersection data or null
+  }
 }
 ```
 
@@ -141,16 +141,16 @@ Create specialized materials with unique properties:
 
 ```javascript
 const glassMaterial = new Material({
-	albedo: new Vector3(0.9, 0.9, 0.9),
-	transparency: 0.95,
-	refractiveIndex: 1.52,
-	roughness: 0.01,
+  albedo: new Vector3(0.9, 0.9, 0.9),
+  transparency: 0.95,
+  refractiveIndex: 1.52,
+  roughness: 0.01,
 });
 
 const mirrorMaterial = new Material({
-	albedo: new Vector3(0.9, 0.9, 0.9),
-	metallic: 1.0,
-	roughness: 0.0,
+  albedo: new Vector3(0.9, 0.9, 0.9),
+  metallic: 1.0,
+  roughness: 0.0,
 });
 ```
 
