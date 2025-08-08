@@ -452,6 +452,13 @@ class RayTracer {
     // Importance sampling settings
     this.useImportanceSampling = false;
     this.indirectSamples = 1;
+    
+    // Denoising settings
+    this.useDenoising = false;
+    this.denoisingStrength = 1.0;
+    this.temporalAccumulation = false;
+    this.previousFrame = null;
+    this.frameAccumulation = 0;
 
     // Scene
     this.objects = [];
@@ -861,6 +868,77 @@ class RayTracer {
     return color;
   }
 
+  applyDenoising() {
+    const denoisedData = new Uint8ClampedArray(this.imageData.data);
+    
+    if (this.temporalAccumulation && this.previousFrame) {
+      this.applyTemporalDenoising(denoisedData);
+    } else {
+      this.applySpatialDenoising(denoisedData);
+    }
+    
+    // Store current frame for temporal accumulation
+    if (this.temporalAccumulation) {
+      this.previousFrame = new Uint8ClampedArray(this.imageData.data);
+      this.frameAccumulation = Math.min(this.frameAccumulation + 1, 16);
+    }
+    
+    this.imageData.data.set(denoisedData);
+  }
+
+  applySpatialDenoising(data) {
+    const kernel = [
+      [1, 2, 1],
+      [2, 4, 2], 
+      [1, 2, 1]
+    ];
+    const kernelSum = 16;
+    const strength = this.denoisingStrength;
+    
+    for (let y = 1; y < this.height - 1; y++) {
+      for (let x = 1; x < this.width - 1; x++) {
+        const index = (y * this.width + x) * 4;
+        
+        let r = 0, g = 0, b = 0;
+        
+        for (let ky = -1; ky <= 1; ky++) {
+          for (let kx = -1; kx <= 1; kx++) {
+            const px = x + kx;
+            const py = y + ky;
+            const pIndex = (py * this.width + px) * 4;
+            const weight = kernel[ky + 1][kx + 1];
+            
+            r += this.imageData.data[pIndex] * weight;
+            g += this.imageData.data[pIndex + 1] * weight;
+            b += this.imageData.data[pIndex + 2] * weight;
+          }
+        }
+        
+        // Blend between original and filtered
+        const originalR = this.imageData.data[index];
+        const originalG = this.imageData.data[index + 1];
+        const originalB = this.imageData.data[index + 2];
+        
+        data[index] = originalR + (r / kernelSum - originalR) * strength;
+        data[index + 1] = originalG + (g / kernelSum - originalG) * strength;
+        data[index + 2] = originalB + (b / kernelSum - originalB) * strength;
+        data[index + 3] = this.imageData.data[index + 3];
+      }
+    }
+  }
+
+  applyTemporalDenoising(data) {
+    const alpha = 1.0 / (this.frameAccumulation + 1);
+    
+    for (let i = 0; i < data.length; i += 4) {
+      // Temporal accumulation with exponential moving average
+      data[i] = this.previousFrame[i] * (1 - alpha) + this.imageData.data[i] * alpha;
+      data[i + 1] = this.previousFrame[i + 1] * (1 - alpha) + this.imageData.data[i + 1] * alpha;
+      data[i + 2] = this.previousFrame[i + 2] * (1 - alpha) + this.imageData.data[i + 2] * alpha;
+      data[i + 3] = this.imageData.data[i + 3];
+    }
+  }
+
   render() {
     if (this.isRendering) {
       console.warn("Render already in progress, queuing next render...");
@@ -937,6 +1015,11 @@ class RayTracer {
         }
       }
 
+      // Apply denoising if enabled
+      if (this.useDenoising) {
+        this.applyDenoising();
+      }
+      
       this.ctx.putImageData(this.imageData, 0, 0);
       this.renderTime = performance.now() - startTime;
       this.updatePerformanceStats();
@@ -1012,6 +1095,12 @@ class RayTracer {
             completedWorkers === Math.ceil(this.height / rowsPerWorker)
           ) {
             clearTimeout(renderTimeout);
+            
+            // Apply denoising if enabled
+            if (this.useDenoising) {
+              this.applyDenoising();
+            }
+            
             this.ctx.putImageData(this.imageData, 0, 0);
             this.renderTime = performance.now() - startTime;
             this.updatePerformanceStats();
@@ -1366,6 +1455,30 @@ class UIController {
     indirectSlider.addEventListener("input", (e) => {
       this.raytracer.indirectSamples = parseInt(e.target.value);
       indirectValue.textContent = e.target.value;
+      if (!this.raytracer.isAnimating) this.raytracer.render();
+    });
+
+    // Denoising
+    const denoisingCheck = document.getElementById("denoising");
+    denoisingCheck.addEventListener("change", (e) => {
+      this.raytracer.useDenoising = e.target.checked;
+      if (!this.raytracer.isAnimating) this.raytracer.render();
+    });
+
+    const temporalCheck = document.getElementById("temporal-accumulation");
+    temporalCheck.addEventListener("change", (e) => {
+      this.raytracer.temporalAccumulation = e.target.checked;
+      // Reset accumulation when toggling
+      this.raytracer.frameAccumulation = 0;
+      this.raytracer.previousFrame = null;
+      if (!this.raytracer.isAnimating) this.raytracer.render();
+    });
+
+    const denoisingSlider = document.getElementById("denoising-strength");
+    const denoisingValue = document.getElementById("denoising-value");
+    denoisingSlider.addEventListener("input", (e) => {
+      this.raytracer.denoisingStrength = parseFloat(e.target.value);
+      denoisingValue.textContent = e.target.value;
       if (!this.raytracer.isAnimating) this.raytracer.render();
     });
 
