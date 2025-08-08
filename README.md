@@ -108,7 +108,8 @@ pure-js-raytracer/
 ├── style.css           # Custom CSS styling
 ├── raytracer.js        # Main ray tracing engine
 ├── worker.js           # Web Worker for parallel processing
-└── README.md           # This documentation
+├── README.md           # This documentation
+└── LICENSE             # MIT License file
 ```
 
 ## Customization
