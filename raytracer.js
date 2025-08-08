@@ -303,6 +303,58 @@ class VolumetricBox {
   }
 }
 
+class HDREnvironmentMap {
+  constructor(canvas) {
+    this.canvas = canvas;
+    this.ctx = canvas.getContext('2d');
+    this.imageData = null;
+    this.width = 0;
+    this.height = 0;
+  }
+
+  async loadFromURL(url) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        this.width = img.width;
+        this.height = img.height;
+        this.canvas.width = this.width;
+        this.canvas.height = this.height;
+        this.ctx.drawImage(img, 0, 0);
+        this.imageData = this.ctx.getImageData(0, 0, this.width, this.height);
+        resolve();
+      };
+      img.onerror = reject;
+      img.src = url;
+    });
+  }
+
+  sample(direction, rotation = 0) {
+    if (!this.imageData) {
+      return new Vector3(0.1, 0.1, 0.2); // Default background
+    }
+
+    // Convert direction to spherical coordinates
+    const theta = Math.atan2(direction.z, direction.x) + rotation;
+    const phi = Math.acos(Math.max(-1, Math.min(1, direction.y)));
+    
+    // Map to texture coordinates
+    const u = (theta + Math.PI) / (2 * Math.PI);
+    const v = phi / Math.PI;
+    
+    const x = Math.floor(u * this.width) % this.width;
+    const y = Math.floor(v * this.height) % this.height;
+    
+    const index = (y * this.width + x) * 4;
+    const r = this.imageData.data[index] / 255.0;
+    const g = this.imageData.data[index + 1] / 255.0;
+    const b = this.imageData.data[index + 2] / 255.0;
+    
+    return new Vector3(r, g, b);
+  }
+}
+
 class VolumeMaterial {
   constructor(options = {}) {
     this.density = options.density || 0.1;
@@ -459,6 +511,12 @@ class RayTracer {
     this.temporalAccumulation = false;
     this.previousFrame = null;
     this.frameAccumulation = 0;
+    
+    // HDR Environment mapping
+    this.useHDREnvironment = false;
+    this.environmentMap = null;
+    this.environmentIntensity = 1.0;
+    this.environmentRotation = 0.0;
 
     // Scene
     this.objects = [];
@@ -490,6 +548,10 @@ class RayTracer {
     this.workers = [];
     this.workersBusy = [];
     this.initWorkers();
+
+    // Initialize HDR environment canvas
+    this.hdrCanvas = document.createElement('canvas');
+    this.environmentMap = new HDREnvironmentMap(this.hdrCanvas);
 
     // Start continuous performance monitoring
     this.startPerformanceMonitoring();
@@ -726,7 +788,10 @@ class RayTracer {
 
     const intersection = this.intersectScene(ray);
     if (!intersection) {
-      return this.backgroundColor.add(volumeColor);
+      const environmentColor = this.useHDREnvironment && this.environmentMap
+        ? this.environmentMap.sample(ray.direction, this.environmentRotation).multiply(this.environmentIntensity)
+        : this.backgroundColor;
+      return environmentColor.add(volumeColor);
     }
 
     const { point, normal, material } = intersection;
@@ -1384,6 +1449,16 @@ class RayTracer {
     this.objects.push(new VolumetricBox(min, max, material));
   }
 
+  async loadHDREnvironment(url) {
+    try {
+      await this.environmentMap.loadFromURL(url);
+      console.log('HDR environment loaded successfully');
+      if (!this.isAnimating) this.render();
+    } catch (error) {
+      console.error('Failed to load HDR environment:', error);
+    }
+  }
+
   addLight(position, color, intensity) {
     this.lights.push(new Light(position, color, intensity));
   }
@@ -1511,6 +1586,37 @@ class UIController {
       if (!this.raytracer.isAnimating) this.raytracer.render();
     });
 
+    // HDR Environment
+    const hdrCheck = document.getElementById("hdr-environment");
+    hdrCheck.addEventListener("change", (e) => {
+      this.raytracer.useHDREnvironment = e.target.checked;
+      if (!this.raytracer.isAnimating) this.raytracer.render();
+    });
+
+    document.getElementById("load-hdr").addEventListener("click", () => {
+      document.getElementById("hdr-file-input").click();
+    });
+
+    document.getElementById("hdr-file-input").addEventListener("change", (e) => {
+      this.handleHDRUpload(e);
+    });
+
+    const envIntensitySlider = document.getElementById("env-intensity");
+    const envIntensityValue = document.getElementById("env-intensity-value");
+    envIntensitySlider.addEventListener("input", (e) => {
+      this.raytracer.environmentIntensity = parseFloat(e.target.value);
+      envIntensityValue.textContent = e.target.value;
+      if (!this.raytracer.isAnimating) this.raytracer.render();
+    });
+
+    const envRotationSlider = document.getElementById("env-rotation");
+    const envRotationValue = document.getElementById("env-rotation-value");
+    envRotationSlider.addEventListener("input", (e) => {
+      this.raytracer.environmentRotation = parseFloat(e.target.value) * Math.PI / 180;
+      envRotationValue.textContent = e.target.value + "°";
+      if (!this.raytracer.isAnimating) this.raytracer.render();
+    });
+
     // Animation controls
     document
       .getElementById("toggle-animation")
@@ -1627,6 +1733,32 @@ class UIController {
     this.raytracer.addVolume(min, max, material);
     this.updateObjectsList();
     if (!this.raytracer.isAnimating) this.raytracer.render();
+  }
+
+  async handleHDRUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const validTypes = ['image/jpeg', 'image/jpg', 'image/png'];
+    if (!validTypes.includes(file.type)) {
+      alert('Please select a valid image file (JPG, PNG)');
+      return;
+    }
+
+    try {
+      const url = URL.createObjectURL(file);
+      await this.raytracer.loadHDREnvironment(url);
+      URL.revokeObjectURL(url);
+      
+      // Enable HDR environment checkbox
+      document.getElementById("hdr-environment").checked = true;
+      this.raytracer.useHDREnvironment = true;
+      
+      console.log('HDR environment loaded and enabled');
+    } catch (error) {
+      console.error('Error loading HDR environment:', error);
+      alert('Error loading HDR environment: ' + error.message);
+    }
   }
 
   addLight() {

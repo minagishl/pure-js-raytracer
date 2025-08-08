@@ -137,6 +137,24 @@
             <label class="block text-sm font-medium mb-1">Ambient Light: <span id="ambient-value">0.1</span></label>
             <input type="range" id="ambient-light" min="0" max="1" step="0.1" value="0.1" class="w-full">
           </div>
+          <div class="space-y-2">
+            <label class="flex items-center">
+              <input type="checkbox" id="hdr-environment" class="mr-2">
+              <span class="text-sm">Enable HDR Environment</span>
+            </label>
+            <button id="load-hdr" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-1 px-2 rounded text-sm">
+              Load HDR Image
+            </button>
+            <div>
+              <label class="block text-sm font-medium mb-1">Environment Intensity: <span id="env-intensity-value">1.0</span></label>
+              <input type="range" id="env-intensity" min="0" max="3" step="0.1" value="1.0" class="w-full">
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1">Environment Rotation: <span id="env-rotation-value">0°</span></label>
+              <input type="range" id="env-rotation" min="0" max="360" step="1" value="0" class="w-full">
+            </div>
+          </div>
+          <input type="file" id="hdr-file-input" accept=".jpg,.jpeg,.png,.exr,.hdr" style="display: none;">
         </div>
       </div>
 
