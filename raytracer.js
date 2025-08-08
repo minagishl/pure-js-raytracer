@@ -365,6 +365,95 @@ class VolumeMaterial {
   }
 }
 
+class Keyframe {
+  constructor(time, transformations = {}) {
+    this.time = time; // Time in seconds
+    this.transformations = transformations; // Object transformations at this time
+  }
+}
+
+class AnimationSystem {
+  constructor() {
+    this.keyframes = [];
+    this.duration = 5.0;
+  }
+
+  addKeyframe(time, objectIndex, transformation) {
+    let keyframe = this.keyframes.find(kf => kf.time === time);
+    if (!keyframe) {
+      keyframe = new Keyframe(time);
+      this.keyframes.push(keyframe);
+      this.keyframes.sort((a, b) => a.time - b.time);
+    }
+    keyframe.transformations[objectIndex] = transformation;
+  }
+
+  removeKeyframe(time) {
+    this.keyframes = this.keyframes.filter(kf => kf.time !== time);
+  }
+
+  interpolate(time) {
+    if (this.keyframes.length < 2) return {};
+
+    // Wrap time to loop
+    const wrappedTime = time % this.duration;
+    
+    // Find surrounding keyframes
+    let prevKeyframe = this.keyframes[this.keyframes.length - 1];
+    let nextKeyframe = this.keyframes[0];
+    
+    for (let i = 0; i < this.keyframes.length - 1; i++) {
+      if (wrappedTime >= this.keyframes[i].time && wrappedTime <= this.keyframes[i + 1].time) {
+        prevKeyframe = this.keyframes[i];
+        nextKeyframe = this.keyframes[i + 1];
+        break;
+      }
+    }
+
+    const t = (wrappedTime - prevKeyframe.time) / (nextKeyframe.time - prevKeyframe.time);
+    const result = {};
+
+    // Interpolate transformations for each object
+    const allObjectIndices = new Set([
+      ...Object.keys(prevKeyframe.transformations),
+      ...Object.keys(nextKeyframe.transformations)
+    ]);
+
+    for (const objectIndex of allObjectIndices) {
+      const prev = prevKeyframe.transformations[objectIndex];
+      const next = nextKeyframe.transformations[objectIndex];
+      
+      if (prev && next) {
+        result[objectIndex] = this.interpolateTransformation(prev, next, t);
+      } else if (prev) {
+        result[objectIndex] = prev;
+      } else if (next) {
+        result[objectIndex] = next;
+      }
+    }
+
+    return result;
+  }
+
+  interpolateTransformation(prev, next, t) {
+    const result = {};
+    
+    if (prev.position && next.position) {
+      result.position = prev.position.lerp(next.position, t);
+    }
+    
+    if (prev.rotation && next.rotation) {
+      result.rotation = prev.rotation.lerp(next.rotation, t);
+    }
+    
+    if (prev.scale !== undefined && next.scale !== undefined) {
+      result.scale = prev.scale * (1 - t) + next.scale * t;
+    }
+
+    return result;
+  }
+}
+
 class OBJLoader {
   static async loadFromFile(file) {
     const text = await file.text();
@@ -543,6 +632,12 @@ class RayTracer {
     this.isAnimating = false;
     this.animationTime = 0;
     this.animationSpeed = 1.0;
+    
+    // Keyframe animation system
+    this.useKeyframes = false;
+    this.keyframes = [];
+    this.animationDuration = 5.0; // seconds
+    this.currentKeyframe = 0;
 
     // Workers
     this.workers = [];
@@ -552,6 +647,9 @@ class RayTracer {
     // Initialize HDR environment canvas
     this.hdrCanvas = document.createElement('canvas');
     this.environmentMap = new HDREnvironmentMap(this.hdrCanvas);
+
+    // Initialize animation system
+    this.animationSystem = new AnimationSystem();
 
     // Start continuous performance monitoring
     this.startPerformanceMonitoring();
@@ -1338,20 +1436,51 @@ class RayTracer {
         : 0.016;
     this.animationTime += deltaTime * this.animationSpeed;
 
-    // Animate objects
-    if (this.objects.length > 0) {
-      this.objects[0].center.y = Math.sin(this.animationTime) * 0.5;
-      this.objects[0].center.x = Math.cos(this.animationTime * 0.7) * 0.3;
-    }
+    if (this.useKeyframes && this.animationSystem.keyframes.length > 0) {
+      // Apply keyframe animations
+      const transformations = this.animationSystem.interpolate(this.animationTime);
+      this.applyTransformations(transformations);
+    } else {
+      // Default procedural animation
+      if (this.objects.length > 0 && this.objects[0].type === "sphere") {
+        this.objects[0].center.y = Math.sin(this.animationTime) * 0.5;
+        this.objects[0].center.x = Math.cos(this.animationTime * 0.7) * 0.3;
+      }
 
-    // Animate lights
-    if (this.lights.length > 0) {
-      this.lights[0].position.x = Math.cos(this.animationTime * 0.5) * 5;
-      this.lights[0].position.z = Math.sin(this.animationTime * 0.5) * 5;
+      // Animate lights
+      if (this.lights.length > 0) {
+        this.lights[0].position.x = Math.cos(this.animationTime * 0.5) * 5;
+        this.lights[0].position.z = Math.sin(this.animationTime * 0.5) * 5;
+      }
     }
 
     this.render();
     requestAnimationFrame(() => this.animate());
+  }
+
+  applyTransformations(transformations) {
+    for (const [objectIndex, transformation] of Object.entries(transformations)) {
+      const index = parseInt(objectIndex);
+      if (index >= 0 && index < this.objects.length) {
+        const object = this.objects[index];
+        
+        if (transformation.position && object.center) {
+          object.center = transformation.position;
+        }
+        
+        if (transformation.scale && object.radius !== undefined) {
+          object.radius = transformation.scale;
+        }
+      }
+    }
+  }
+
+  addKeyframe(time, objectIndex, transformation) {
+    this.animationSystem.addKeyframe(time, objectIndex, transformation);
+  }
+
+  removeKeyframe(time) {
+    this.animationSystem.removeKeyframe(time);
   }
 
   toggleAnimation() {
@@ -1629,6 +1758,27 @@ class UIController {
     speedSlider.addEventListener("input", (e) => {
       this.raytracer.animationSpeed = parseFloat(e.target.value);
       speedValue.textContent = e.target.value + "x";
+    });
+
+    // Keyframe animation
+    const useKeyframesCheck = document.getElementById("use-keyframes");
+    useKeyframesCheck.addEventListener("change", (e) => {
+      this.raytracer.useKeyframes = e.target.checked;
+    });
+
+    const durationSlider = document.getElementById("animation-duration");
+    const durationValue = document.getElementById("duration-value");
+    durationSlider.addEventListener("input", (e) => {
+      this.raytracer.animationSystem.duration = parseFloat(e.target.value);
+      durationValue.textContent = e.target.value + "s";
+    });
+
+    document.getElementById("add-keyframe").addEventListener("click", () => {
+      this.addCurrentKeyframe();
+    });
+
+    document.getElementById("demo-keyframes").addEventListener("click", () => {
+      this.createDemoAnimation();
     });
 
     // Reset camera
@@ -1935,6 +2085,73 @@ class UIController {
     this.raytracer.removeLight(index);
     this.updateLightsList();
     if (!this.raytracer.isAnimating) this.raytracer.render();
+  }
+
+  addCurrentKeyframe() {
+    const currentTime = this.raytracer.animationTime % this.raytracer.animationSystem.duration;
+    
+    // Add keyframes for all objects at current time
+    for (let i = 0; i < this.raytracer.objects.length; i++) {
+      const object = this.raytracer.objects[i];
+      const transformation = {};
+      
+      if (object.center) {
+        transformation.position = object.center.clone();
+      }
+      
+      if (object.radius !== undefined) {
+        transformation.scale = object.radius;
+      }
+      
+      this.raytracer.addKeyframe(currentTime, i, transformation);
+    }
+    
+    console.log(`Added keyframe at time ${currentTime.toFixed(2)}s`);
+  }
+
+  createDemoAnimation() {
+    // Clear existing keyframes
+    this.raytracer.animationSystem.keyframes = [];
+    
+    if (this.raytracer.objects.length === 0) {
+      alert('Please add some objects first to create animation');
+      return;
+    }
+    
+    const duration = this.raytracer.animationSystem.duration;
+    const objectIndex = 0; // Animate first object
+    const object = this.raytracer.objects[objectIndex];
+    
+    if (object.center) {
+      const originalPos = object.center.clone();
+      
+      // Create circular motion keyframes
+      for (let i = 0; i <= 4; i++) {
+        const time = (duration / 4) * i;
+        const angle = (Math.PI * 2 * i) / 4;
+        const radius = 2.0;
+        
+        const transformation = {
+          position: new Vector3(
+            originalPos.x + Math.cos(angle) * radius,
+            originalPos.y + Math.sin(angle) * radius,
+            originalPos.z
+          )
+        };
+        
+        if (object.radius !== undefined) {
+          transformation.scale = object.radius + Math.sin(angle) * 0.3;
+        }
+        
+        this.raytracer.addKeyframe(time, objectIndex, transformation);
+      }
+    }
+    
+    // Enable keyframe animation
+    document.getElementById("use-keyframes").checked = true;
+    this.raytracer.useKeyframes = true;
+    
+    console.log('Demo animation created with circular motion');
   }
 }
 
