@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pure JS Ray Tracer</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body class="bg-gray-900 text-white overflow-hidden">
+  <div class="flex h-screen">
+    <!-- Main Canvas Area -->
+    <div class="flex-1 relative">
+      <canvas id="raytracer-canvas" class="border border-gray-700"></canvas>
+
+      <!-- Performance Stats -->
+      <div class="absolute top-4 left-4 bg-black bg-opacity-50 p-3 rounded">
+        <div class="text-green-400 text-sm">FPS: <span id="fps-counter">0</span></div>
+        <div class="text-blue-400 text-sm">Render Time: <span id="render-time">0ms</span></div>
+        <div class="text-yellow-400 text-sm">Rays: <span id="ray-count">0</span></div>
+      </div>
+
+      <!-- Instructions -->
+      <div class="absolute bottom-4 left-4 bg-black bg-opacity-50 p-3 rounded text-sm">
+        <div>Click and drag to rotate camera</div>
+        <div>Mouse wheel to zoom</div>
+        <div>Space to toggle animation</div>
+      </div>
+    </div>
+
+    <!-- Control Panel -->
+    <div class="w-80 bg-gray-800 p-6 overflow-y-auto border-l border-gray-700">
+      <h2 class="text-xl font-bold mb-6">Ray Tracer Controls</h2>
+
+      <!-- Rendering Settings -->
+      <div class="mb-6">
+        <h3 class="text-lg font-semibold mb-3">Rendering</h3>
+        <div class="space-y-3">
+          <div>
+            <label class="block text-sm font-medium mb-1">Resolution</label>
+            <select id="resolution" class="w-full bg-gray-700 border border-gray-600 rounded p-2">
+              <option value="0.25">Quarter (Fast)</option>
+              <option value="0.5" selected>Half (Balanced)</option>
+              <option value="1.0">Full (Slow)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-1">Max Bounces: <span id="bounces-value">3</span></label>
+            <input type="range" id="max-bounces" min="1" max="8" value="3" class="w-full">
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-1">Anti-aliasing Samples: <span id="aa-value">1</span></label>
+            <input type="range" id="anti-aliasing" min="1" max="4" value="1" class="w-full">
+          </div>
+        </div>
+      </div>
+
+      <!-- Scene Objects -->
+      <div class="mb-6">
+        <h3 class="text-lg font-semibold mb-3">Objects</h3>
+        <div id="objects-list" class="space-y-3">
+          <!-- Objects will be dynamically added here -->
+        </div>
+        <button id="add-sphere" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded mt-3">
+          Add Sphere
+        </button>
+      </div>
+
+      <!-- Lighting -->
+      <div class="mb-6">
+        <h3 class="text-lg font-semibold mb-3">Lighting</h3>
+        <div id="lights-list" class="space-y-3">
+          <!-- Lights will be dynamically added here -->
+        </div>
+        <button id="add-light" class="w-full bg-yellow-600 hover:bg-yellow-700 text-white py-2 px-4 rounded mt-3">
+          Add Light
+        </button>
+      </div>
+
+      <!-- Camera -->
+      <div class="mb-6">
+        <h3 class="text-lg font-semibold mb-3">Camera</h3>
+        <div class="space-y-3">
+          <div>
+            <label class="block text-sm font-medium mb-1">Field of View: <span id="fov-value">45°</span></label>
+            <input type="range" id="camera-fov" min="20" max="120" value="45" class="w-full">
+          </div>
+          <button id="reset-camera" class="w-full bg-gray-600 hover:bg-gray-700 text-white py-2 px-4 rounded">
+            Reset Camera
+          </button>
+        </div>
+      </div>
+
+      <!-- Environment -->
+      <div class="mb-6">
+        <h3 class="text-lg font-semibold mb-3">Environment</h3>
+        <div class="space-y-3">
+          <div>
+            <label class="block text-sm font-medium mb-1">Background Color</label>
+            <input type="color" id="bg-color" value="#0f172a"
+              class="w-full bg-gray-700 border border-gray-600 rounded p-1">
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-1">Ambient Light: <span id="ambient-value">0.1</span></label>
+            <input type="range" id="ambient-light" min="0" max="1" step="0.1" value="0.1" class="w-full">
+          </div>
+        </div>
+      </div>
+
+      <!-- Animation -->
+      <div>
+        <h3 class="text-lg font-semibold mb-3">Animation</h3>
+        <div class="space-y-3">
+          <button id="toggle-animation" class="w-full bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded">
+            Start Animation
+          </button>
+          <div>
+            <label class="block text-sm font-medium mb-1">Speed: <span id="speed-value">1.0x</span></label>
+            <input type="range" id="animation-speed" min="0.1" max="3.0" step="0.1" value="1.0" class="w-full">
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="raytracer.js"></script>
+</body>
+
+</html>
