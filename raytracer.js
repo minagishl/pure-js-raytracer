@@ -589,6 +589,53 @@ class Camera {
     this.position = this.position.add(forward);
     this.updateVectors();
   }
+
+  moveForward(amount) {
+    const forward = this.forward.multiply(amount);
+    this.position = this.position.add(forward);
+    this.target = this.target.add(forward);
+    this.updateVectors();
+  }
+
+  moveRight(amount) {
+    const right = this.right.multiply(amount);
+    this.position = this.position.add(right);
+    this.target = this.target.add(right);
+    this.updateVectors();
+  }
+
+  moveUp(amount) {
+    const up = this.up.multiply(amount);
+    this.position = this.position.add(up);
+    this.target = this.target.add(up);
+    this.updateVectors();
+  }
+
+  rotateCameraYaw(amount) {
+    const yawAxis = this.up;
+    const newForward = this.rotateVector(this.forward, yawAxis, amount);
+    this.target = this.position.add(newForward);
+    this.updateVectors();
+  }
+
+  rotateCameraPitch(amount) {
+    const pitchAxis = this.right;
+    const newForward = this.rotateVector(this.forward, pitchAxis, amount);
+    this.target = this.position.add(newForward);
+    this.updateVectors();
+  }
+
+  rotateVector(vector, axis, angle) {
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    const dot = vector.dot(axis);
+    const cross = axis.cross(vector);
+
+    return vector
+      .multiply(cos)
+      .add(cross.multiply(sin))
+      .add(axis.multiply(dot * (1 - cos)));
+  }
 }
 
 class RayTracer {
@@ -821,11 +868,223 @@ class RayTracer {
 
     // Keyboard controls
     document.addEventListener("keydown", (e) => {
-      if (e.code === "Space") {
-        e.preventDefault();
-        this.toggleAnimation();
-      }
+      this.handleKeyDown(e);
     });
+  }
+
+  handleKeyDown(e) {
+    const moveSpeed = 0.5;
+    const rotateSpeed = 0.05;
+    let shouldRender = false;
+
+    // Prevent default browser behavior for handled keys
+    const handledKeys = [
+      "Space",
+      "KeyW",
+      "KeyA",
+      "KeyS",
+      "KeyD",
+      "KeyQ",
+      "KeyE",
+      "ArrowUp",
+      "ArrowDown",
+      "ArrowLeft",
+      "ArrowRight",
+      "KeyR",
+      "KeyT",
+      "KeyI",
+      "KeyH",
+      "KeyM",
+      "KeyV",
+      "KeyL",
+      "KeyK",
+    ];
+
+    if (handledKeys.includes(e.code)) {
+      e.preventDefault();
+    }
+
+    switch (e.code) {
+      // Animation control
+      case "Space":
+        this.toggleAnimation();
+        break;
+
+      // Camera movement (WASD + QE)
+      case "KeyW": // Move forward
+        this.camera.moveForward(moveSpeed);
+        shouldRender = true;
+        break;
+      case "KeyS": // Move backward
+        this.camera.moveForward(-moveSpeed);
+        shouldRender = true;
+        break;
+      case "KeyA": // Move left
+        this.camera.moveRight(-moveSpeed);
+        shouldRender = true;
+        break;
+      case "KeyD": // Move right
+        this.camera.moveRight(moveSpeed);
+        shouldRender = true;
+        break;
+      case "KeyQ": // Move down
+        this.camera.moveUp(-moveSpeed);
+        shouldRender = true;
+        break;
+      case "KeyE": // Move up
+        this.camera.moveUp(moveSpeed);
+        shouldRender = true;
+        break;
+
+      // Camera rotation (Arrow keys)
+      case "ArrowLeft": // Rotate left
+        this.camera.rotateCameraYaw(-rotateSpeed);
+        shouldRender = true;
+        break;
+      case "ArrowRight": // Rotate right
+        this.camera.rotateCameraYaw(rotateSpeed);
+        shouldRender = true;
+        break;
+      case "ArrowUp": // Rotate up
+        this.camera.rotateCameraPitch(-rotateSpeed);
+        shouldRender = true;
+        break;
+      case "ArrowDown": // Rotate down
+        this.camera.rotateCameraPitch(rotateSpeed);
+        shouldRender = true;
+        break;
+
+      // Rendering controls
+      case "KeyR": // Reset camera
+        this.camera = new Camera(
+          new Vector3(0, 0, 5),
+          new Vector3(0, 0, 0),
+          new Vector3(0, 1, 0),
+          45,
+          this.width / this.height
+        );
+        shouldRender = true;
+        break;
+
+      // Feature toggles
+      case "KeyI": // Toggle importance sampling
+        this.useImportanceSampling = !this.useImportanceSampling;
+        document.getElementById("importance-sampling").checked =
+          this.useImportanceSampling;
+        console.log(
+          "Importance sampling:",
+          this.useImportanceSampling ? "ON" : "OFF"
+        );
+        shouldRender = true;
+        break;
+
+      case "KeyH": // Toggle HDR environment
+        this.useHDREnvironment = !this.useHDREnvironment;
+        document.getElementById("hdr-environment").checked =
+          this.useHDREnvironment;
+        console.log("HDR environment:", this.useHDREnvironment ? "ON" : "OFF");
+        shouldRender = true;
+        break;
+
+      case "KeyT": // Toggle denoising
+        this.useDenoising = !this.useDenoising;
+        document.getElementById("denoising").checked = this.useDenoising;
+        console.log("Denoising:", this.useDenoising ? "ON" : "OFF");
+        shouldRender = true;
+        break;
+
+      // Object management
+      case "KeyM": // Add sphere
+        this.addRandomSphere();
+        shouldRender = true;
+        break;
+
+      case "KeyV": // Add volume
+        this.addRandomVolume();
+        shouldRender = true;
+        break;
+
+      case "KeyL": // Add light
+        this.addRandomLight();
+        shouldRender = true;
+        break;
+
+      case "KeyK": // Toggle keyframe animation
+        this.useKeyframes = !this.useKeyframes;
+        document.getElementById("use-keyframes").checked = this.useKeyframes;
+        console.log("Keyframe animation:", this.useKeyframes ? "ON" : "OFF");
+        break;
+
+      default:
+        return; // Don't render for unhandled keys
+    }
+
+    if (shouldRender && !this.isAnimating) {
+      this.render();
+    }
+  }
+
+  addRandomSphere() {
+    const material = new Material({
+      albedo: new Vector3(Math.random(), Math.random(), Math.random()),
+      metallic: Math.random(),
+      roughness: Math.random(),
+    });
+
+    const center = new Vector3(
+      (Math.random() - 0.5) * 4,
+      (Math.random() - 0.5) * 4,
+      (Math.random() - 0.5) * 4
+    );
+
+    this.addSphere(center, 0.5 + Math.random() * 0.5, material);
+    console.log("Added random sphere");
+
+    // Update UI if it exists
+    if (window.ui) {
+      window.ui.updateObjectsList();
+    }
+  }
+
+  addRandomVolume() {
+    const min = new Vector3(
+      (Math.random() - 0.5) * 4 - 1,
+      (Math.random() - 0.5) * 4 - 1,
+      (Math.random() - 0.5) * 4 - 1
+    );
+    const max = min.add(new Vector3(2, 2, 2));
+
+    const material = new VolumeMaterial({
+      density: 0.3 + Math.random() * 0.4,
+      absorption: new Vector3(0.1, 0.1, 0.1),
+      scattering: new Vector3(0.8, 0.8, 0.8),
+      emission: new Vector3(Math.random() * 0.2, Math.random() * 0.1, 0),
+    });
+
+    this.addVolume(min, max, material);
+    console.log("Added random volume");
+
+    // Update UI if it exists
+    if (window.ui) {
+      window.ui.updateObjectsList();
+    }
+  }
+
+  addRandomLight() {
+    const position = new Vector3(
+      (Math.random() - 0.5) * 8,
+      2 + Math.random() * 4,
+      (Math.random() - 0.5) * 8
+    );
+
+    const color = new Vector3(Math.random(), Math.random(), Math.random());
+    this.addLight(position, color, 0.5 + Math.random() * 0.5);
+    console.log("Added random light");
+
+    // Update UI if it exists
+    if (window.ui) {
+      window.ui.updateLightsList();
+    }
   }
 
   intersectScene(ray) {

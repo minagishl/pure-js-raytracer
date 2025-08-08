@@ -51,9 +51,39 @@ A high-performance real-time ray tracing engine built entirely with vanilla Java
 
 ### Controls
 
-- **Mouse**: Click and drag to rotate the camera
+#### Mouse Controls
+
+- **Click & Drag**: Rotate the camera
 - **Mouse Wheel**: Zoom in/out
-- **Spacebar**: Toggle animation on/off
+
+#### Keyboard Controls
+
+**Movement (WASD + QE):**
+
+- **W/S**: Move forward/backward
+- **A/D**: Move left/right
+- **Q/E**: Move down/up
+
+**Camera (Arrow Keys):**
+
+- **←/→**: Rotate left/right
+- **↑/↓**: Rotate up/down
+- **R**: Reset camera to default position
+
+**Features:**
+
+- **Space**: Toggle animation on/off
+- **I**: Toggle importance sampling
+- **H**: Toggle HDR environment mapping
+- **T**: Toggle denoising
+- **K**: Toggle keyframe animation
+
+**Quick Add Objects:**
+
+- **M**: Add random sphere
+- **V**: Add random volume
+- **L**: Add random light
+
 - **Control Panel**: Adjust all rendering and scene parameters
 
 ## Technical Implementation
