@@ -54,6 +54,16 @@
             <label class="block text-sm font-medium mb-1">Anti-aliasing Samples: <span id="aa-value">1</span></label>
             <input type="range" id="anti-aliasing" min="1" max="4" value="1" class="w-full">
           </div>
+          <div class="space-y-2">
+            <label class="flex items-center">
+              <input type="checkbox" id="importance-sampling" class="mr-2">
+              <span class="text-sm">Enable Importance Sampling</span>
+            </label>
+            <div>
+              <label class="block text-sm font-medium mb-1">Indirect Samples: <span id="indirect-value">1</span></label>
+              <input type="range" id="indirect-samples" min="1" max="8" value="1" class="w-full">
+            </div>
+          </div>
         </div>
       </div>
 

@@ -66,6 +66,48 @@ class Vector3 {
   clone() {
     return new Vector3(this.x, this.y, this.z);
   }
+
+  // Random sampling methods for importance sampling
+  static randomCosineWeightedHemisphere(normal) {
+    const r1 = Math.random();
+    const r2 = Math.random();
+    
+    const cosTheta = Math.sqrt(r1);
+    const sinTheta = Math.sqrt(1 - r1);
+    const phi = 2 * Math.PI * r2;
+    
+    const x = sinTheta * Math.cos(phi);
+    const y = sinTheta * Math.sin(phi);
+    const z = cosTheta;
+    
+    // Create local coordinate system
+    const up = Math.abs(normal.z) < 0.9 ? new Vector3(0, 0, 1) : new Vector3(1, 0, 0);
+    const tangent = normal.cross(up).normalize();
+    const bitangent = normal.cross(tangent);
+    
+    return tangent.multiply(x).add(bitangent.multiply(y)).add(normal.multiply(z));
+  }
+
+  static randomUnitSphere() {
+    let p;
+    do {
+      p = new Vector3(
+        Math.random() * 2 - 1,
+        Math.random() * 2 - 1,
+        Math.random() * 2 - 1
+      );
+    } while (p.lengthSquared() >= 1.0);
+    return p;
+  }
+
+  static randomHemisphere(normal) {
+    const inUnitSphere = Vector3.randomUnitSphere().normalize();
+    if (inUnitSphere.dot(normal) > 0.0) {
+      return inUnitSphere;
+    } else {
+      return inUnitSphere.multiply(-1);
+    }
+  }
 }
 
 class Ray {
@@ -406,6 +448,10 @@ class RayTracer {
     this.ambientLight = 0.1;
     this.useWorkers = navigator.hardwareConcurrency > 1;
     this.numWorkers = Math.min(navigator.hardwareConcurrency || 4, 8);
+    
+    // Importance sampling settings
+    this.useImportanceSampling = false;
+    this.indirectSamples = 1;
 
     // Scene
     this.objects = [];
@@ -681,6 +727,12 @@ class RayTracer {
     // Calculate direct lighting
     let color = this.calculateLighting(point, normal, material, ray.direction);
 
+    // Add indirect lighting using importance sampling
+    if (this.useImportanceSampling && depth < this.maxBounces - 1) {
+      const indirectColor = this.calculateIndirectLighting(ray, point, normal, material, depth);
+      color = color.add(indirectColor);
+    }
+
     // Handle reflections
     if (material.metallic > 0 && depth < this.maxBounces - 1) {
       const reflectionDir = ray.direction.reflect(normal);
@@ -713,6 +765,34 @@ class RayTracer {
     }
 
     return color.add(volumeColor);
+  }
+
+  calculateIndirectLighting(_ray, point, normal, material, depth) {
+    let indirectColor = new Vector3(0, 0, 0);
+    const epsilon = 1e-6;
+
+    for (let sample = 0; sample < this.indirectSamples; sample++) {
+      // Use cosine-weighted hemisphere sampling for better results
+      const sampleDirection = Vector3.randomCosineWeightedHemisphere(normal);
+      
+      const indirectRay = new Ray(
+        point.add(normal.multiply(epsilon)),
+        sampleDirection
+      );
+      
+      const indirectRadiance = this.trace(indirectRay, depth + 1);
+      
+      // BRDF weighting (simple Lambertian)
+      const brdf = material.albedo.multiply(1.0 / Math.PI);
+      
+      // Monte Carlo integration with cosine-weighted sampling
+      // pdf = cosTheta / π, so cosTheta / pdf = π
+      indirectColor = indirectColor.add(
+        indirectRadiance.multiply(brdf.x).multiply(Math.PI)
+      );
+    }
+    
+    return indirectColor.divide(this.indirectSamples);
   }
 
   intersectVolumes(ray) {
@@ -765,11 +845,10 @@ class RayTracer {
     return color;
   }
 
-  sampleVolumeLight(point, material) {
+  sampleVolumeLight(point, _material) {
     let color = new Vector3(0, 0, 0);
     
     for (const light of this.lights) {
-      const lightDir = light.position.subtract(point).normalize();
       const lightDistance = light.position.subtract(point).length();
       
       // Simple phase function (isotropic scattering)
@@ -1272,6 +1351,21 @@ class UIController {
     aaSlider.addEventListener("input", (e) => {
       this.raytracer.antiAliasingSamples = parseInt(e.target.value);
       aaValue.textContent = e.target.value;
+      if (!this.raytracer.isAnimating) this.raytracer.render();
+    });
+
+    // Importance sampling
+    const importanceSamplingCheck = document.getElementById("importance-sampling");
+    importanceSamplingCheck.addEventListener("change", (e) => {
+      this.raytracer.useImportanceSampling = e.target.checked;
+      if (!this.raytracer.isAnimating) this.raytracer.render();
+    });
+
+    const indirectSlider = document.getElementById("indirect-samples");
+    const indirectValue = document.getElementById("indirect-value");
+    indirectSlider.addEventListener("input", (e) => {
+      this.raytracer.indirectSamples = parseInt(e.target.value);
+      indirectValue.textContent = e.target.value;
       if (!this.raytracer.isAnimating) this.raytracer.render();
     });
 
