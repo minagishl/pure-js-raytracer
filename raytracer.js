@@ -127,6 +127,130 @@ class Sphere {
   }
 }
 
+class Triangle {
+  constructor(v0, v1, v2, material) {
+    this.v0 = v0;
+    this.v1 = v1;
+    this.v2 = v2;
+    this.material = material;
+    this.type = "triangle";
+    
+    // Pre-calculate normal
+    const edge1 = v1.subtract(v0);
+    const edge2 = v2.subtract(v0);
+    this.normal = edge1.cross(edge2).normalize();
+  }
+
+  intersect(ray) {
+    const epsilon = 1e-6;
+    const edge1 = this.v1.subtract(this.v0);
+    const edge2 = this.v2.subtract(this.v0);
+    const h = ray.direction.cross(edge2);
+    const a = edge1.dot(h);
+    
+    if (a > -epsilon && a < epsilon) return null;
+    
+    const f = 1.0 / a;
+    const s = ray.origin.subtract(this.v0);
+    const u = f * s.dot(h);
+    
+    if (u < 0.0 || u > 1.0) return null;
+    
+    const q = s.cross(edge1);
+    const v = f * ray.direction.dot(q);
+    
+    if (v < 0.0 || u + v > 1.0) return null;
+    
+    const t = f * edge2.dot(q);
+    
+    if (t > epsilon) {
+      const point = ray.at(t);
+      return {
+        t: t,
+        point: point,
+        normal: this.normal,
+        material: this.material,
+      };
+    }
+    
+    return null;
+  }
+}
+
+class Mesh {
+  constructor(vertices, faces, material) {
+    this.vertices = vertices;
+    this.faces = faces;
+    this.material = material;
+    this.type = "mesh";
+    this.triangles = [];
+    
+    // Convert faces to triangles
+    for (const face of faces) {
+      if (face.length >= 3) {
+        for (let i = 1; i < face.length - 1; i++) {
+          const triangle = new Triangle(
+            vertices[face[0]],
+            vertices[face[i]],
+            vertices[face[i + 1]],
+            material
+          );
+          this.triangles.push(triangle);
+        }
+      }
+    }
+  }
+
+  intersect(ray) {
+    let closest = null;
+    let minDistance = Infinity;
+
+    for (const triangle of this.triangles) {
+      const intersection = triangle.intersect(ray);
+      if (intersection && intersection.t < minDistance) {
+        minDistance = intersection.t;
+        closest = intersection;
+      }
+    }
+
+    return closest;
+  }
+}
+
+class OBJLoader {
+  static async loadFromFile(file) {
+    const text = await file.text();
+    return this.parseOBJ(text);
+  }
+
+  static parseOBJ(objText) {
+    const vertices = [];
+    const faces = [];
+    const lines = objText.split('\n');
+
+    for (const line of lines) {
+      const parts = line.trim().split(/\s+/);
+      if (parts[0] === 'v') {
+        // Vertex
+        vertices.push(new Vector3(
+          parseFloat(parts[1]),
+          parseFloat(parts[2]),
+          parseFloat(parts[3])
+        ));
+      } else if (parts[0] === 'f') {
+        // Face (convert to 0-based indices)
+        const face = parts.slice(1).map(part => {
+          const vertexIndex = parseInt(part.split('/')[0]) - 1;
+          return vertexIndex;
+        });
+        faces.push(face);
+      }
+    }
+
+    return { vertices, faces };
+  }
+}
+
 class Plane {
   constructor(point, normal, material) {
     this.point = point;
@@ -765,6 +889,30 @@ class RayTracer {
             : null,
         },
       };
+    } else if (obj.type === "mesh") {
+      return {
+        type: "mesh",
+        vertices: obj.vertices.map(v => ({ x: v.x, y: v.y, z: v.z })),
+        faces: obj.faces,
+        material: {
+          albedo: {
+            x: obj.material.albedo.x,
+            y: obj.material.albedo.y,
+            z: obj.material.albedo.z,
+          },
+          metallic: obj.material.metallic,
+          roughness: obj.material.roughness,
+          transparency: obj.material.transparency,
+          refractiveIndex: obj.material.refractiveIndex,
+          emission: obj.material.emission
+            ? {
+                x: obj.material.emission.x,
+                y: obj.material.emission.y,
+                z: obj.material.emission.z,
+              }
+            : null,
+        },
+      };
     }
   }
 
@@ -906,6 +1054,10 @@ class RayTracer {
     this.objects.push(new Sphere(center, radius, material));
   }
 
+  addMesh(vertices, faces, material) {
+    this.objects.push(new Mesh(vertices, faces, material));
+  }
+
   addLight(position, color, intensity) {
     this.lights.push(new Light(position, color, intensity));
   }
@@ -1025,6 +1177,14 @@ class UIController {
       this.addSphere();
     });
 
+    document.getElementById("load-mesh").addEventListener("click", () => {
+      document.getElementById("mesh-file-input").click();
+    });
+
+    document.getElementById("mesh-file-input").addEventListener("change", (e) => {
+      this.handleMeshUpload(e);
+    });
+
     document.getElementById("add-light").addEventListener("click", () => {
       this.addLight();
     });
@@ -1046,6 +1206,42 @@ class UIController {
     this.raytracer.addSphere(center, 0.5 + Math.random() * 0.5, material);
     this.updateObjectsList();
     if (!this.raytracer.isAnimating) this.raytracer.render();
+  }
+
+  async handleMeshUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    if (!file.name.toLowerCase().endsWith('.obj')) {
+      alert('Please select an OBJ file');
+      return;
+    }
+
+    try {
+      const { vertices, faces } = await OBJLoader.loadFromFile(file);
+      
+      if (vertices.length === 0 || faces.length === 0) {
+        alert('Invalid OBJ file or no geometry found');
+        return;
+      }
+
+      // Scale down mesh if too large
+      const scale = 2.0;
+      const scaledVertices = vertices.map(v => v.multiply(scale));
+
+      const material = new Material({
+        albedo: new Vector3(0.7, 0.7, 0.8),
+        metallic: 0.3,
+        roughness: 0.4,
+      });
+
+      this.raytracer.addMesh(scaledVertices, faces, material);
+      this.updateObjectsList();
+      if (!this.raytracer.isAnimating) this.raytracer.render();
+    } catch (error) {
+      console.error('Error loading mesh:', error);
+      alert('Error loading mesh file: ' + error.message);
+    }
   }
 
   addLight() {
@@ -1097,6 +1293,27 @@ class UIController {
                     </div>
                     <button class="remove-btn" onclick="ui.removeObject(${index})">Remove</button>
                 `;
+      } else if (object.type === "mesh") {
+        panel.innerHTML = `
+                    <div class="text-sm font-medium mb-2">Mesh ${
+                      index + 1
+                    } (${object.triangles.length} triangles)</div>
+                    <div class="control-group">
+                        <label>Metallic:</label>
+                        <input type="range" min="0" max="1" step="0.1" value="${
+                          object.material.metallic
+                        }" 
+                               onchange="ui.updateObjectMetallic(${index}, this.value)">
+                    </div>
+                    <div class="control-group">
+                        <label>Transparency:</label>
+                        <input type="range" min="0" max="1" step="0.1" value="${
+                          object.material.transparency
+                        }" 
+                               onchange="ui.updateObjectTransparency(${index}, this.value)">
+                    </div>
+                    <button class="remove-btn" onclick="ui.removeObject(${index})">Remove</button>
+                `;
       }
 
       container.appendChild(panel);
@@ -1145,6 +1362,20 @@ class UIController {
   }
 
   updateSphereTransparency(index, value) {
+    if (this.raytracer.objects[index]) {
+      this.raytracer.objects[index].material.transparency = parseFloat(value);
+      if (!this.raytracer.isAnimating) this.raytracer.render();
+    }
+  }
+
+  updateObjectMetallic(index, value) {
+    if (this.raytracer.objects[index]) {
+      this.raytracer.objects[index].material.metallic = parseFloat(value);
+      if (!this.raytracer.isAnimating) this.raytracer.render();
+    }
+  }
+
+  updateObjectTransparency(index, value) {
     if (this.raytracer.objects[index]) {
       this.raytracer.objects[index].material.transparency = parseFloat(value);
       if (!this.raytracer.isAnimating) this.raytracer.render();

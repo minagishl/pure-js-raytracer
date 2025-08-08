@@ -105,6 +105,74 @@ function intersectSphere(ray, sphere) {
   };
 }
 
+function intersectTriangle(ray, triangle) {
+  const epsilon = 1e-6;
+  const v0 = new Vector3(triangle.v0.x, triangle.v0.y, triangle.v0.z);
+  const v1 = new Vector3(triangle.v1.x, triangle.v1.y, triangle.v1.z);
+  const v2 = new Vector3(triangle.v2.x, triangle.v2.y, triangle.v2.z);
+  
+  const edge1 = v1.subtract(v0);
+  const edge2 = v2.subtract(v0);
+  const h = ray.direction.cross(edge2);
+  const a = edge1.dot(h);
+  
+  if (a > -epsilon && a < epsilon) return null;
+  
+  const f = 1.0 / a;
+  const s = ray.origin.subtract(v0);
+  const u = f * s.dot(h);
+  
+  if (u < 0.0 || u > 1.0) return null;
+  
+  const q = s.cross(edge1);
+  const v = f * ray.direction.dot(q);
+  
+  if (v < 0.0 || u + v > 1.0) return null;
+  
+  const t = f * edge2.dot(q);
+  
+  if (t > epsilon) {
+    const point = ray.at(t);
+    const normal = edge1.cross(edge2).normalize();
+    return {
+      t: t,
+      point: point,
+      normal: normal,
+      material: triangle.material,
+    };
+  }
+  
+  return null;
+}
+
+function intersectMesh(ray, mesh) {
+  let closest = null;
+  let minDistance = Infinity;
+  
+  const vertices = mesh.vertices.map(v => new Vector3(v.x, v.y, v.z));
+  
+  for (const face of mesh.faces) {
+    if (face.length >= 3) {
+      for (let i = 1; i < face.length - 1; i++) {
+        const triangle = {
+          v0: vertices[face[0]],
+          v1: vertices[face[i]],
+          v2: vertices[face[i + 1]],
+          material: mesh.material
+        };
+        
+        const intersection = intersectTriangle(ray, triangle);
+        if (intersection && intersection.t < minDistance) {
+          minDistance = intersection.t;
+          closest = intersection;
+        }
+      }
+    }
+  }
+  
+  return closest;
+}
+
 function intersectPlane(ray, plane) {
   const point = new Vector3(plane.point.x, plane.point.y, plane.point.z);
   const normal = new Vector3(
@@ -140,6 +208,8 @@ function intersectScene(ray, objects) {
       intersection = intersectSphere(ray, object);
     } else if (object.type === "plane") {
       intersection = intersectPlane(ray, object);
+    } else if (object.type === "mesh") {
+      intersection = intersectMesh(ray, object);
     }
 
     if (intersection && intersection.t < minDistance) {
