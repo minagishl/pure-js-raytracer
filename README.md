@@ -163,13 +163,13 @@ const mirrorMaterial = new Material({
 
 ## Future Enhancements
 
-- [ ] Mesh loading (OBJ/GLTF support)
-- [ ] Volumetric rendering
-- [ ] Importance sampling
-- [ ] Denoising algorithms
-- [ ] HDR environment mapping
-- [ ] Animation keyframes
-- [ ] Scene serialization/loading
+- [x] Mesh loading (OBJ/GLTF support)
+- [x] Volumetric rendering
+- [x] Importance sampling
+- [x] Denoising algorithms
+- [x] HDR environment mapping
+- [x] Animation keyframes
+- [x] Scene serialization/loading
 
 ## Contributing
 
