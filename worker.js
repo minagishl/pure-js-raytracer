@@ -90,7 +90,8 @@ function intersectSphere(ray, sphere) {
   const t1 = (-b - sqrt_discriminant) / (2.0 * a);
   const t2 = (-b + sqrt_discriminant) / (2.0 * a);
 
-  const t = t1 > 0.001 ? t1 : t2 > 0.001 ? t2 : null;
+  const epsilon = 1e-6;
+  const t = t1 > epsilon ? t1 : t2 > epsilon ? t2 : null;
   if (t === null) return null;
 
   const point = ray.at(t);
@@ -116,7 +117,8 @@ function intersectPlane(ray, plane) {
   if (Math.abs(denom) < 0.0001) return null;
 
   const t = point.subtract(ray.origin).dot(normal) / denom;
-  if (t < 0.001) return null;
+  const epsilon = 1e-6;
+  if (t < epsilon) return null;
 
   const hitPoint = ray.at(t);
   return {
@@ -180,7 +182,8 @@ function calculateLighting(
     const lightDistance = lightPos.subtract(point).length();
 
     // Shadow ray
-    const shadowRay = new Ray(point.add(normal.multiply(0.001)), lightDir);
+    const epsilon = 1e-6;
+    const shadowRay = new Ray(point.add(normal.multiply(epsilon)), lightDir);
     const shadowIntersection = intersectScene(shadowRay, objects);
 
     if (shadowIntersection && shadowIntersection.t < lightDistance) {
@@ -251,8 +254,9 @@ function trace(
   // Handle reflections
   if (material.metallic > 0 && depth < maxBounces - 1) {
     const reflectionDir = ray.direction.reflect(normal);
+    const epsilon = 1e-6;
     const reflectionRay = new Ray(
-      point.add(normal.multiply(0.001)),
+      point.add(normal.multiply(epsilon)),
       reflectionDir
     );
     const reflectionColor = trace(
@@ -276,8 +280,9 @@ function trace(
     const refractionDir = ray.direction.refract(normal, eta);
 
     if (refractionDir) {
+      const epsilon = 1e-6;
       const refractionRay = new Ray(
-        point.subtract(normal.multiply(0.001)),
+        point.subtract(normal.multiply(epsilon)),
         refractionDir
       );
       const refractionColor = trace(
@@ -370,11 +375,16 @@ self.onmessage = function (e) {
 
       color = color.divide(antiAliasingSamples);
 
-      // Gamma correction and tone mapping
+      // Gamma correction and tone mapping with smoother clamping
+      const clamp = (value, min, max) => {
+        if (value < min) return min;
+        if (value > max) return max;
+        return value;
+      };
       color = new Vector3(
-        Math.sqrt(Math.min(1, color.x)),
-        Math.sqrt(Math.min(1, color.y)),
-        Math.sqrt(Math.min(1, color.z))
+        Math.sqrt(clamp(color.x, 0, 1)),
+        Math.sqrt(clamp(color.y, 0, 1)),
+        Math.sqrt(clamp(color.z, 0, 1))
       );
 
       const index = ((y - startY) * width + x) * 4;

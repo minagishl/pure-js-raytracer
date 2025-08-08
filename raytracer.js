@@ -111,7 +111,8 @@ class Sphere {
     const t1 = (-b - sqrt_discriminant) / (2.0 * a);
     const t2 = (-b + sqrt_discriminant) / (2.0 * a);
 
-    const t = t1 > 0.001 ? t1 : t2 > 0.001 ? t2 : null;
+    const epsilon = 1e-6;
+    const t = t1 > epsilon ? t1 : t2 > epsilon ? t2 : null;
     if (t === null) return null;
 
     const point = ray.at(t);
@@ -139,7 +140,8 @@ class Plane {
     if (Math.abs(denom) < 0.0001) return null;
 
     const t = this.point.subtract(ray.origin).dot(this.normal) / denom;
-    if (t < 0.001) return null;
+    const epsilon = 1e-6;
+    if (t < epsilon) return null;
 
     const point = ray.at(t);
     return {
@@ -445,7 +447,8 @@ class RayTracer {
       const lightDistance = light.position.subtract(point).length();
 
       // Shadow ray
-      const shadowRay = new Ray(point.add(normal.multiply(0.001)), lightDir);
+      const epsilon = 1e-6;
+      const shadowRay = new Ray(point.add(normal.multiply(epsilon)), lightDir);
       const shadowIntersection = this.intersectScene(shadowRay);
 
       if (shadowIntersection && shadowIntersection.t < lightDistance) {
@@ -495,8 +498,9 @@ class RayTracer {
     // Handle reflections
     if (material.metallic > 0 && depth < this.maxBounces - 1) {
       const reflectionDir = ray.direction.reflect(normal);
+      const epsilon = 1e-6;
       const reflectionRay = new Ray(
-        point.add(normal.multiply(0.001)),
+        point.add(normal.multiply(epsilon)),
         reflectionDir
       );
       const reflectionColor = this.trace(reflectionRay, depth + 1);
@@ -512,8 +516,9 @@ class RayTracer {
       const refractionDir = ray.direction.refract(normal, eta);
 
       if (refractionDir) {
+        const epsilon = 1e-6;
         const refractionRay = new Ray(
-          point.subtract(normal.multiply(0.001)),
+          point.subtract(normal.multiply(epsilon)),
           refractionDir
         );
         const refractionColor = this.trace(refractionRay, depth + 1);
@@ -526,9 +531,11 @@ class RayTracer {
 
   render() {
     if (this.isRendering) {
-      console.warn("Render already in progress, skipping...");
+      console.warn("Render already in progress, queuing next render...");
+      this.shouldRenderAgain = true;
       return;
     }
+    this.shouldRenderAgain = false;
 
     this.isRendering = true;
     const startTime = performance.now();
@@ -578,11 +585,16 @@ class RayTracer {
 
           color = color.divide(this.antiAliasingSamples);
 
-          // Gamma correction and tone mapping
+          // Gamma correction and tone mapping with smoother clamping
+          const clamp = (value, min, max) => {
+            if (value < min) return min;
+            if (value > max) return max;
+            return value;
+          };
           color = new Vector3(
-            Math.sqrt(Math.min(1, Math.max(0, color.x))),
-            Math.sqrt(Math.min(1, Math.max(0, color.y))),
-            Math.sqrt(Math.min(1, Math.max(0, color.z)))
+            Math.sqrt(clamp(color.x, 0, 1)),
+            Math.sqrt(clamp(color.y, 0, 1)),
+            Math.sqrt(clamp(color.z, 0, 1))
           );
 
           const index = (y * this.width + x) * 4;
@@ -618,7 +630,7 @@ class RayTracer {
         this.isRendering = false;
         this.render();
       }
-    }, 30000); // 30 second timeout
+    }, 60000); // 60 second timeout to prevent premature cuts
 
     for (let i = 0; i < this.numWorkers; i++) {
       const startY = i * rowsPerWorker;
@@ -847,7 +859,7 @@ class RayTracer {
         this.rayCount.toLocaleString();
 
       // Check if rendering has stalled
-      if (this.isRendering && currentTime - this.lastFrameTime > 5000) {
+      if (this.isRendering && currentTime - this.lastFrameTime > 10000) {
         console.warn(
           "Rendering appears to have stalled, attempting recovery..."
         );
@@ -873,6 +885,11 @@ class RayTracer {
     this.frameCount++;
     this.lastFrameTime = performance.now();
     this.isRendering = false;
+
+    // Render again if queued
+    if (this.shouldRenderAgain) {
+      setTimeout(() => this.render(), 10);
+    }
   }
 
   resize(width, height) {
@@ -1061,21 +1078,21 @@ class UIController {
                         <label>Radius:</label>
                         <input type="range" min="0.1" max="2" step="0.1" value="${
                           object.radius
-                        }" 
+                        }"
                                onchange="ui.updateSphereRadius(${index}, this.value)">
                     </div>
                     <div class="control-group">
                         <label>Metallic:</label>
                         <input type="range" min="0" max="1" step="0.1" value="${
                           object.material.metallic
-                        }" 
+                        }"
                                onchange="ui.updateSphereMetallic(${index}, this.value)">
                     </div>
                     <div class="control-group">
                         <label>Transparency:</label>
                         <input type="range" min="0" max="1" step="0.1" value="${
                           object.material.transparency
-                        }" 
+                        }"
                                onchange="ui.updateSphereTransparency(${index}, this.value)">
                     </div>
                     <button class="remove-btn" onclick="ui.removeObject(${index})">Remove</button>
@@ -1100,7 +1117,7 @@ class UIController {
                     <label>Intensity:</label>
                     <input type="range" min="0" max="2" step="0.1" value="${
                       light.intensity
-                    }" 
+                    }"
                            onchange="ui.updateLightIntensity(${index}, this.value)">
                 </div>
                 <button class="remove-btn" onclick="ui.removeLight(${index})">Remove</button>
@@ -1155,7 +1172,7 @@ class UIController {
 }
 
 // Initialize the application
-let raytracer, ui;
+let raytracer, ui; // eslint-disable-line no-unused-vars
 
 window.addEventListener("DOMContentLoaded", () => {
   const canvas = document.getElementById("raytracer-canvas");
